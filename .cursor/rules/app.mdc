@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+一个用于展示 otp 二次验证码的 uTools 插件

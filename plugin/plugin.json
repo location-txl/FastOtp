@@ -1,0 +1,19 @@
+{
+  "main": "dist/index.html",
+  "logo": "logo.png",
+  "preload": "preload.js",
+  "features": [
+    {
+      "code": "otp",
+      "explain": "OTP 二次验证码，支持快捷键复制",
+      "cmds": ["OTP", "二次验证", "验证码", "2FA", "Two-Factor Authentication"]
+    }
+  ],
+  "development": {
+    "main": "http://localhost:5173"
+  },
+  "pluginSetting": {
+    "single": true,
+    "height": 800
+  }
+}

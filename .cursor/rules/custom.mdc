@@ -1,0 +1,23 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 基础
+一个uTools 插件项目
+uTools 插件开发文档 https://www.u-tools.cn/docs/developer/docs.html 
+
+./plugin 是 utools 插件配置文件
+
+[preload.js](mdc:plugin/preload.js) 类似于 electron 的 preload.js 用于ui层和 node 进行通信
+[custom.d.ts](mdc:src/custom.d.ts) preload.js 的类型定义
+
+
+# 使用的框架
+使用 vite 编译项目
+使用 react + antd 编写 ui
+antd 文档 https://ant.design/components/overview-cn/
+
+
+
+
