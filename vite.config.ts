@@ -6,6 +6,15 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   build: {
-    outDir: 'plugin/dist'
+    outDir: 'plugin/dist',
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          antd: ['antd']
+        }
+      }
+    }
   }
 })
