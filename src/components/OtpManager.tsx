@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme } from 'antd';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme,  } from 'antd';
 import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import { messageRef } from '../App';
 import { DEFAULT_OTP_PERIOD } from '../constants';
 import { OtpItem } from '../custom';
+import { useSubInput } from '../hooks/useSubInput';
+import PageLayout from './PageLayout';
+import OtpGroup from './OtpGroup';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -18,6 +21,7 @@ const OtpManager: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importUri, setImportUri] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+  const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
   
   // 添加共用计时器状态
   const [timeLeft, setTimeLeft] = useState(DEFAULT_OTP_PERIOD);
@@ -36,6 +40,30 @@ const OtpManager: React.FC = () => {
 
   // 获取主题色
   const { token } = useToken();
+
+  const { value:searchText } = useSubInput(
+    undefined,
+    '搜索验证码',
+    true,
+    ''
+  );
+  
+  // 使用useMemo缓存不同issuer分组的数据
+
+  
+  // 基于搜索文本和当前激活分组过滤数据
+  const filteredItems = useMemo(() => {
+    if (searchText && searchText.trim().length > 0) {
+      const searchLow = searchText.toLowerCase();
+      return otpItems.filter(item => 
+        (item.issuer && item.issuer.toLowerCase().includes(searchLow)) || 
+        (item.name && item.name.toLowerCase().includes(searchLow))
+      );
+    } else {
+      // 直接使用缓存的分组数据
+      return groupItems;
+    }
+  }, [otpItems, searchText, groupItems]);
 
   // 共用的计时器逻辑
   useEffect(() => {
@@ -66,24 +94,23 @@ const OtpManager: React.FC = () => {
   }, [timeLeft]);
 
   useEffect(() => {
-    loadOtpItems();
     // 组件挂载后自动聚焦到容器，但只在没有模态框打开时
     if (containerRef.current && !formVisible && !importModalVisible) {
-      containerRef.current.focus();
+        containerRef.current.focus();
     }
   }, [formVisible, importModalVisible]);
 
   useEffect(() => {
     // 重置引用数组大小以匹配当前项目数量
-    cardRefs.current = cardRefs.current.slice(0, otpItems.length);
+    cardRefs.current = cardRefs.current.slice(0, filteredItems.length);
     // 如果有项目且未选择任何项目，默认选择第一个
-    if (otpItems.length > 0 && selectedIndex === -1) {
+    if (filteredItems.length > 0 && selectedIndex === -1) {
       setSelectedIndex(0);
-    } else if (selectedIndex >= otpItems.length) {
+    } else if (selectedIndex >= filteredItems.length) {
       // 如果选择的索引超出范围，重置为最后一个
-      setSelectedIndex(otpItems.length - 1);
+      setSelectedIndex(filteredItems.length - 1);
     }
-  }, [otpItems, selectedIndex]);
+  }, [filteredItems, selectedIndex]);
 
   // 滚动选中项到可视区域
   const scrollItemIntoView = (index: number) => {
@@ -106,6 +133,9 @@ const OtpManager: React.FC = () => {
       }
     }
   };
+  useEffect(() => {
+    loadOtpItems();
+  }, []);
 
   // 使用React的onKeyDown事件处理键盘输入
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -136,7 +166,7 @@ const OtpManager: React.FC = () => {
         console.log('向下箭头按下');
         event.preventDefault();
         setSelectedIndex(prev => {
-          const newIndex = Math.min(otpItems.length - 1, prev + 1);
+          const newIndex = Math.min(filteredItems.length - 1, prev + 1);
           console.log('新索引:', newIndex);
           // 在下一个渲染周期滚动到视图
           setTimeout(() => scrollItemIntoView(newIndex), 0);
@@ -145,7 +175,7 @@ const OtpManager: React.FC = () => {
         break;
       case 'Enter':
         event.preventDefault();
-        if (selectedIndex >= 0 && selectedIndex < otpItems.length) {
+        if (selectedIndex >= 0 && selectedIndex < filteredItems.length) {
           // 使用ref中存储的验证码，而不是state
           const code = currentOtpsRef.current[selectedIndex];
           if (code) {
@@ -153,13 +183,13 @@ const OtpManager: React.FC = () => {
               window.api.otp.copyToClipboard(code);
               
               // 复制成功后显示系统通知
-              const item = otpItems[selectedIndex];
+              const item = filteredItems[selectedIndex];
               const title = item.issuer || '';
               const name = item.name || '验证码';
               window.utools.showNotification(`${title ? title + ' - ' : ''}${name} 验证码已复制: ${code}`);
               
               // 关闭插件
-              window.utools.outPlugin();
+              window.utools.outPlugin(true);
               
               if (messageRef.current) {
                 messageRef.current.success(`验证码 ${code} 已复制到剪贴板`);
@@ -333,6 +363,51 @@ const OtpManager: React.FC = () => {
     currentOtpsRef.current[index] = otp;
   };
 
+  // 渲染当前分组的OTP卡片
+  const renderCurrentGroupOtpCards = () => {
+    const items = filteredItems;
+    
+    if (items.length === 0) {
+      return (
+        <Empty 
+          description={searchText.length > 0 ? '未找到匹配的验证器' : '此分组暂无验证器'} 
+          style={{ marginTop: 60 }}
+        />
+      );
+    }
+
+    return (
+      <div className="otp-cards-container" >
+        {items.map((item, index) => (
+          <div 
+            key={item.id}
+            ref={(el) => setCardRef(el, index)}
+            onClick={() => setSelectedIndex(index)}
+          >
+            <OtpCard 
+              item={item}
+              index={index}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+              isSelected={selectedIndex === index}
+              onOtpGenerated={(otp) => handleOtpGenerated(otp, index)}
+              timeLeft={timeLeft}
+              refreshKey={refreshCounter}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // 处理分组切换
+  const handleGroupChange = useCallback((newGroupItems:OtpItem[]) => {
+    setGroupItems(newGroupItems);
+    setSelectedIndex(-1); // 重置选中项
+  }, []);
+
+
+
   return (
     <div 
       ref={containerRef}
@@ -341,93 +416,71 @@ const OtpManager: React.FC = () => {
       style={{ 
         outline: 'none', 
         width: '100%', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: '100%',
-        overflow: 'hidden',
-        position: 'relative'
+        height: '100%'
       }}
     >
-      <div className="otp-content" style={{ flex: 1, overflow: 'auto' }}>
-        {otpItems.length === 0 ? (
-          <Empty 
-            description="暂无验证器" 
-            style={{ marginTop: 60 }}
-          />
-        ) : (
-          <div className="otp-cards-container">
-            {otpItems.map((item, index) => (
-              <div 
-                key={item.id}
-                ref={(el) => setCardRef(el, index)}
-                onClick={() => setSelectedIndex(index)}
-              >
-                <OtpCard 
-                  item={item}
-                  index={index}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  isSelected={selectedIndex === index}
-                  onOtpGenerated={(otp) => handleOtpGenerated(otp, index)}
-                  timeLeft={timeLeft}
-                  refreshKey={refreshCounter}
-                />
-              </div>
-            ))}
+      <PageLayout
+        headerContent={
+          <div style={{ display: searchText.length > 0 ? 'none' : 'block' }}>
+            <OtpGroup otpItems={otpItems} onSelectIssuer={handleGroupChange} />
           </div>
-        )}
-      </div>
-
-      {/* Footer 部分 */}
-      <div 
-        className="otp-footer"
-        style={{ 
-          borderTop: `1px solid ${token.colorBorderSecondary}`, 
-          padding: '8px 12px',
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          backgroundColor: token.colorBgElevated,
-          height: '40px',
-          boxShadow: `0 -2px 8px ${token.colorBgContainer}20`
-        }}
-      >
-        <Space>
-          <Tooltip title="添加验证器">
-            <Button 
-              type="text" 
-              icon={<PlusOutlined />} 
-              onClick={handleAdd}
-              size="small"
-            />
-          </Tooltip>
-          <Tooltip title="导入验证器">
-            <Button 
-              type="text" 
-              icon={<ImportOutlined />} 
-              onClick={handleImport}
-              size="small"
-            />
-          </Tooltip>
-          <Tooltip title="从文本文件导入">
-            <Button 
-              type="text" 
-              icon={<FileTextOutlined />} 
-              onClick={handleFileImport}
-              size="small"
-            />
-          </Tooltip>
-        </Space>
-        
-        {otpItems.length > 0 && (
-          <Tooltip title="使用↑↓键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
-            <Space size={4}>
-              <Text type="secondary" style={{ fontSize: '12px' }}>快捷键</Text>
-              <QuestionCircleOutlined style={{ color: token.colorPrimary, fontSize: '14px' }} />
+        }
+        footerHeight={40}
+        footerContent={
+          <div 
+            className="otp-footer"
+            style={{ 
+              backgroundColor: token.colorBgElevated,
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              height:'40px',
+              width: '100%',
+              padding: '0 16px'
+            }}
+          >
+            <Space>
+              <Tooltip title="添加验证器">
+                <Button 
+                  type="text" 
+                  icon={<PlusOutlined />} 
+                  onClick={handleAdd}
+                  size="small"
+                />
+              </Tooltip>
+              <Tooltip title="导入验证器">
+                <Button 
+                  type="text" 
+                  icon={<ImportOutlined />} 
+                  onClick={handleImport}
+                  size="small"
+                />
+              </Tooltip>
+              <Tooltip title="从文本文件导入">
+                <Button 
+                  type="text" 
+                  icon={<FileTextOutlined />} 
+                  onClick={handleFileImport}
+                  size="small"
+                />
+              </Tooltip>
             </Space>
-          </Tooltip>
-        )}
-      </div>
+            
+            {otpItems.length > 0 && (
+              <Tooltip title="使用↑↓键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
+                <Space size={4}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>快捷键</Text>
+                  <QuestionCircleOutlined style={{ color: token.colorPrimary, fontSize: '14px' }} />
+                </Space>
+              </Tooltip>
+            )}
+          </div>
+        }
+      >
+        <div className="otp-content">
+          {renderCurrentGroupOtpCards()}
+        </div>
+      </PageLayout>
 
       <OtpForm
         visible={formVisible}

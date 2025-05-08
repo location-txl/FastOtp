@@ -54,6 +54,10 @@ declare global {
             setSubInput: (onChange: (details: { text: string }) => void, placeholder?: string, isFocus?: boolean) => boolean;
             removeSubInput: () => boolean;
             setSubInputValue: (text: string) => boolean;
+            subInputFocus: () => boolean;
+            subInputBlur: () => boolean;
+            subInputSelect: () => boolean;
+            onPluginEnter: (callback: (data: any) => void) => void;
             outPlugin: (isKill?: boolean) => boolean;
             redirect: (label: string | [string, string], payload?: any) => boolean;
             [key: string]: any;
