@@ -189,7 +189,7 @@ const OtpManager: React.FC = () => {
               window.utools.showNotification(`${title ? title + ' - ' : ''}${name} 验证码已复制: ${code}`);
               
               // 关闭插件
-              window.utools.outPlugin(true);
+              window.utools.outPlugin();
               
               if (messageRef.current) {
                 messageRef.current.success(`验证码 ${code} 已复制到剪贴板`);

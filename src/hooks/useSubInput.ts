@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-
+import { useEffect, useState, useCallback, useRef, useContext } from 'react';
+import { PluginEnterContext } from './PageEnterContext';
 /**
  * React hook用于管理uTools子输入框
  * @param onChange 输入框内容变化时的回调函数
@@ -15,6 +15,7 @@ export const useSubInput = (
   initialValue: string = ''
 ) => {
   const [value, setValue] = useState(initialValue);
+  const pageEnter = useContext(PluginEnterContext);
   
   // 使用ref存储最新的onChange回调，避免依赖变化
   const onChangeRef = useRef(onChange);
@@ -32,6 +33,7 @@ export const useSubInput = (
 
   // 设置子输入框，仅在组件挂载和placeholder/autoFocus变化时执行
   useEffect(() => {
+    if(!pageEnter) return;
     if (!window.utools) return;
 
     console.log('设置子输入框', Date.now());
@@ -51,7 +53,7 @@ export const useSubInput = (
     return () => {
       window.utools.removeSubInput();
     };
-  }, [placeholder, autoFocus, handleInputChange, initialValue]);
+  }, [placeholder, autoFocus, handleInputChange, initialValue, pageEnter]);
 
   // 设置子输入框的值
   const setInputValue = useCallback((text: string) => {
