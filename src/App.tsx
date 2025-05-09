@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import OtpManager from './components/OtpManager';
 import CustomMessage, { CustomMessageRef } from './components/CustomMessage';
 import zhCN from 'antd/locale/zh_CN';
+import { PluginEnterContext, PluginEnterAction } from './hooks/PageEnterContext';
 import './App.css';
 // import './App.css';
 
@@ -11,7 +12,6 @@ export const messageRef = React.createRef<CustomMessageRef>();
 
 // 确保消息容器在DOM中渲染
 // 在uTools插件环境中可能需要特别处理
-let init = false;
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -23,7 +23,7 @@ function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   
-  const [isPluginEntered, setIsPluginEntered] = useState(false);
+  const [pageEnter, setPageEnter] = useState<PluginEnterAction | undefined>(undefined);
 
   useEffect(() => {
     // 监听系统主题变化
@@ -42,16 +42,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    console.log('插件进入', Date.now());
     // 监听插件进入事件
-    if (window.utools && !init) {
-      console.log('插件进入', Date.now());
-      window.utools.onPluginEnter(() => {
-        setIsPluginEntered(true);
+    if (window.utools) {
+      window.utools.onPluginEnter((action: PluginEnterAction) => {
+        setPageEnter(action);
       });
-      // 设置初始化标志 在开发环境中，每次刷新页面都会重新初始化
-      init = true;
-    }else{
-      setIsPluginEntered(true);
+      window.utools.onPluginOut(() => {
+        setPageEnter(undefined);
+      })
     }
   }, []);
 
@@ -67,7 +66,11 @@ function App() {
     >
       <AntdApp style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         <CustomMessage ref={messageRef} />
-        {isPluginEntered && <OtpManager />}
+        
+        <PluginEnterContext.Provider value={pageEnter}>
+          <OtpManager />
+        </PluginEnterContext.Provider>
+      
       </AntdApp>
     </ConfigProvider>
   );
