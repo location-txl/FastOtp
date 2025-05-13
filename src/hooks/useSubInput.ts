@@ -43,6 +43,7 @@ export const useSubInput = (
       placeholder,
       autoFocus
     );
+    handleInputChange({text: initialValue});
 
     // 如果有初始值，设置子输入框的值
     if (initialValue) {
