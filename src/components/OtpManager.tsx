@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme,  } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined } from '@ant-design/icons';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, DownloadOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import { messageRef } from '../App';
@@ -349,6 +349,34 @@ const OtpManager: React.FC = () => {
     }
   };
 
+  const handleFileExport = () => {
+    try {
+      const savePath = window.utools?.showSaveDialog({
+        title: '导出OTP文本文件',
+        defaultPath: 'otp.txt',
+        filters: [{ name: 'Text Files', extensions: ['txt'] }]
+      });
+
+      if (!savePath) {
+        return;
+      }
+
+      const success = window.api.otp.exportOtpToFile(savePath);
+      if (success) {
+        if (messageRef.current) {
+          messageRef.current.success('验证器已导出');
+        }
+      } else if (messageRef.current) {
+        messageRef.current.error('导出失败');
+      }
+    } catch (error: unknown) {
+      console.error('导出OTP文件失败:', error);
+      if (messageRef.current) {
+        messageRef.current.error('导出失败: ' + ((error as Error).message || '未知错误'));
+      }
+    }
+  };
+
   const setCardRef = (el: HTMLDivElement | null, index: number) => {
     if (el) {
       cardRefs.current[index] = el;
@@ -457,10 +485,18 @@ const OtpManager: React.FC = () => {
                 />
               </Tooltip>
               <Tooltip title="从文本文件导入">
-                <Button 
-                  type="text" 
-                  icon={<FileTextOutlined />} 
+                <Button
+                  type="text"
+                  icon={<FileTextOutlined />}
                   onClick={handleFileImport}
+                  size="small"
+                />
+              </Tooltip>
+              <Tooltip title="导出到文本文件">
+                <Button
+                  type="text"
+                  icon={<DownloadOutlined />}
+                  onClick={handleFileExport}
                   size="small"
                 />
               </Tooltip>
