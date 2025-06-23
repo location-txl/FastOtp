@@ -44,6 +44,7 @@ declare global {
                 importOtpUri: (uri: string) => OtpItem;
                 importOtpTextFile: (text: string) => ImportTextFileResult;
                 importOtpFromFile: (filePath: string) => ImportTextFileResult;
+                exportOtpToFile: (filePath: string) => boolean;
             }
         }
         utools?: {
