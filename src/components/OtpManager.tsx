@@ -181,22 +181,17 @@ const OtpManager: React.FC = () => {
           if (code) {
             try {
               window.api.otp.copyToClipboard(code);
-              
-              // 复制成功后显示系统通知
               const item = filteredItems[selectedIndex];
               const title = item.issuer || '';
               const name = item.name || '验证码';
-              window.utools.showNotification(`${title ? title + ' - ' : ''}${name} 验证码已复制: ${code}`);
-              
-              // 关闭插件
-              window.utools.outPlugin();
-              
+              window.utools.showNotification(`${title ? title + ' - ' : ''}${name} 验证码已复制并输入: ${code}`);
+
+              // 隐藏uTools主窗口并直接输入验证码
+              window.utools.hideMainWindowTypeString(code);
+            } catch (e) {
+              console.error('自动输入验证码失败:', e);
               if (messageRef.current) {
-                messageRef.current.success(`验证码 ${code} 已复制到剪贴板`);
-              }
-            } catch {
-              if (messageRef.current) {
-                messageRef.current.error('复制验证码失败');
+                messageRef.current.error('自动输入验证码失败');
               }
             }
           } else {
