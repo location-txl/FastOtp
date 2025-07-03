@@ -1,13 +1,14 @@
 /// <reference path="../custom.d.ts" />
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Progress, Typography, Space, theme, Button } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { Card, Progress, Typography, Space, theme, Button, Modal } from 'antd';
+import { DeleteOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { messageRef } from '../App';
 import { DEFAULT_OTP_PERIOD } from '../constants';
 import type { OtpItem } from '../custom.d';
 
 const { Text, Title } = Typography;
 const { useToken } = theme;
+const REMARK_LEN = 20
 
 interface OtpCardProps {
   item: {
@@ -15,6 +16,7 @@ interface OtpCardProps {
     name: string;
     secret: string;
     issuer?: string;
+    remark?: string;
     digits?: number;
     period?: number;
     algorithm?: 'SHA1' | 'SHA256' | 'SHA512';
@@ -40,6 +42,7 @@ const OtpCard: React.FC<OtpCardProps> = ({
 }) => {
   const [otp, setOtp] = useState('');
   const [nextOtp, setNextOtp] = useState(''); // 新增状态：存储下一个OTP
+  const [showRemarkModal, setShowRemarkModal] = useState(false);
   const period = item.period || DEFAULT_OTP_PERIOD;
   const { token } = useToken();
 
@@ -251,6 +254,38 @@ const OtpCard: React.FC<OtpCardProps> = ({
           </div>
         </div>
       </div>
+      {item.remark && (
+        <div style={{ marginTop: '8px' }}>
+          <Text type="secondary" style={{ fontSize: '12px', verticalAlign: 'middle' }}>
+            {item.remark.length > REMARK_LEN ? `${item.remark.substring(0, REMARK_LEN)}...` : item.remark}
+          </Text>
+          {item.remark.length > REMARK_LEN && (
+            <Button
+              icon={<InfoCircleOutlined />}
+              size="small"
+              type="text"
+              style={{ verticalAlign: 'middle', padding: '0 4px' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowRemarkModal(true);
+              }}
+            />
+          )}
+        </div>
+      )}
+      {item.remark && (
+        <Modal
+          title="备注信息"
+          open={showRemarkModal}
+          onCancel={(e) => {
+            e.stopPropagation();
+            setShowRemarkModal(false);
+          }}
+          footer={null}
+        >
+          <p>{item.remark}</p>
+        </Modal>
+      )}
     </Card>
   );
 };
