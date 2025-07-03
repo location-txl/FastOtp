@@ -15,6 +15,7 @@ interface OtpFormValues {
   name: string;
   issuer?: string;
   secret: string;
+  remark?: string;
   type: 'totp';
   algorithm: 'SHA1';
   digits: 6;
@@ -90,6 +91,16 @@ const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem })
         >
           <Input.TextArea 
             placeholder="JBSW Y3DP EHPK 3PXP"
+            rows={3}
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="remark"
+          label="备注"
+        >
+          <Input.TextArea 
+            placeholder="请输入备注信息"
             rows={3}
           />
         </Form.Item>

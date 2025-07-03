@@ -8,6 +8,7 @@ export interface OtpItem {
     secret: string;
     issuer?: string;
     account?: string;
+    remark?: string;
     digits?: number;
     period?: number;
     algorithm?: 'SHA1' | 'SHA256' | 'SHA512';
