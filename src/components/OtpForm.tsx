@@ -25,6 +25,12 @@ interface OtpFormValues {
 const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem }) => {
   const [form] = Form.useForm<OtpFormValues>();
 
+  // 处理表单关闭
+  const handleClose = () => {
+    form.resetFields();
+    onClose();
+  };
+
   useEffect(() => {
     if (visible && editItem) {
       form.setFieldsValue(editItem as OtpFormValues);
@@ -58,9 +64,9 @@ const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem })
     <Modal
       title={editItem ? "编辑验证器" : "添加新验证器"}
       open={visible}
-      onCancel={onClose}
+      onCancel={handleClose}
       footer={[
-        <Button key="cancel" onClick={onClose}>
+        <Button key="cancel" onClick={handleClose}>
           取消
         </Button>,
         <Button key="submit" type="primary" onClick={handleSubmit}>
@@ -115,4 +121,4 @@ const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem })
   );
 };
 
-export default OtpForm; 
+export default OtpForm;
