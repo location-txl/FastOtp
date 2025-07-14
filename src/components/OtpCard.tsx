@@ -283,7 +283,9 @@ const OtpCard: React.FC<OtpCardProps> = ({
           }}
           footer={null}
         >
-          <p>{item.remark}</p>
+          <pre style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontFamily: 'inherit', margin: 0 }}>
+            {item.remark}
+          </pre>
         </Modal>
       )}
     </Card>
