@@ -23,7 +23,8 @@ window.api = {
         parseOtpUri,
         importOtpUri,
         importOtpTextFile,
-        importOtpFromFile
+        importOtpFromFile,
+        exportOtpToFile
     }
 }
 
@@ -267,6 +268,32 @@ function importOtpFromFile(filePath) {
     } catch (error) {
         console.error('从文件导入OTP失败:', error);
         throw error;
+    }
+}
+
+// 将 OtpItem 转换为 otpauth URI
+function formatOtpUri(item) {
+    const issuerPart = item.issuer ? encodeURIComponent(item.issuer) + ':' : '';
+    const label = issuerPart + encodeURIComponent(item.name);
+    const params = new URLSearchParams();
+    params.set('secret', item.secret);
+    if (item.issuer) params.set('issuer', item.issuer);
+    if (item.digits) params.set('digits', String(item.digits));
+    if (item.period) params.set('period', String(item.period));
+    if (item.algorithm) params.set('algorithm', item.algorithm.toUpperCase());
+    return `otpauth://totp/${label}?${params.toString()}`;
+}
+
+// 导出OTP到文本文件，每行一个otpauth URI
+function exportOtpToFile(filePath) {
+    try {
+        const items = getOtpItems();
+        const lines = items.map(formatOtpUri).join('\n');
+        fs.writeFileSync(filePath, lines, 'utf-8');
+        return true;
+    } catch (error) {
+        console.error('导出OTP失败:', error);
+        return false;
     }
 }
 
