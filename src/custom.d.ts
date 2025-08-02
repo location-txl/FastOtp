@@ -22,6 +22,13 @@ interface ImportTextFileResult {
     errors: string[];
 }
 
+interface ExportResult {
+    success: boolean;
+    message: string;
+    path?: string;
+    count?: number;
+}
+
 declare global {
     interface Window {
         api: {
@@ -45,6 +52,8 @@ declare global {
                 importOtpUri: (uri: string) => OtpItem;
                 importOtpTextFile: (text: string) => ImportTextFileResult;
                 importOtpFromFile: (filePath: string) => ImportTextFileResult;
+                exportOtpToFile: () => ExportResult;
+                generateOtpUri: (item: OtpItem) => string;
             }
         }
         utools?: {
@@ -61,6 +70,17 @@ declare global {
             onPluginEnter: (callback: (data: any) => void) => void;
             outPlugin: (isKill?: boolean) => boolean;
             redirect: (label: string | [string, string], payload?: any) => boolean;
+            showSaveDialog: (options?: {
+                title?: string;
+                defaultPath?: string;
+                filters?: { name: string; extensions: string[] }[];
+            }) => string | undefined;
+            showOpenDialog: (options?: {
+                title?: string;
+                filters?: { name: string; extensions: string[] }[];
+                properties?: string[];
+            }) => string[] | undefined;
+            showNotification: (body: string, clickFeatureCode?: string) => boolean;
             [key: string]: any;
         }
     }

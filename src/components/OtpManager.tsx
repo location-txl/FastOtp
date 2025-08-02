@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme,  } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined } from '@ant-design/icons';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import { messageRef } from '../App';
@@ -344,6 +344,33 @@ const OtpManager: React.FC = () => {
     }
   };
 
+  // 导出OTP配置
+  const handleExport = async () => {
+    try {
+      const result = window.api.otp.exportOtpToFile();
+      
+      if (result.success) {
+        if (messageRef.current) {
+          messageRef.current.success(result.message);
+        }
+        
+        // 显示系统通知
+        if (window.utools) {
+          window.utools.showNotification(`已导出 ${result.count} 个验证器到文件`);
+        }
+      } else {
+        if (messageRef.current) {
+          messageRef.current.error(result.message);
+        }
+      }
+    } catch (error: unknown) {
+      console.error('导出OTP失败:', error);
+      if (messageRef.current) {
+        messageRef.current.error('导出失败: ' + ((error as Error).message || '未知错误'));
+      }
+    }
+  };
+
   const setCardRef = (el: HTMLDivElement | null, index: number) => {
     if (el) {
       cardRefs.current[index] = el;
@@ -457,6 +484,15 @@ const OtpManager: React.FC = () => {
                   icon={<FileTextOutlined />} 
                   onClick={handleFileImport}
                   size="small"
+                />
+              </Tooltip>
+              <Tooltip title="导出验证器配置">
+                <Button 
+                  type="text" 
+                  icon={<ExportOutlined />} 
+                  onClick={handleExport}
+                  size="small"
+                  disabled={otpItems.length === 0}
                 />
               </Tooltip>
             </Space>
