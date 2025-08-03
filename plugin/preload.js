@@ -4,6 +4,7 @@ const otpCode = require('./otp_code');
 const fs = require('fs');
 
 const DB_KEY_OTP_ITEMS = 'otp_items';
+const DB_KEY_DELETED_ITEMS = 'deleted_otp_items';
 const db = utools.dbCryptoStorage || utools.dbStorage;
 
 
@@ -25,7 +26,10 @@ window.api = {
         importOtpTextFile,
         importOtpFromFile,
         exportOtpToFile,
-        generateOtpUri
+        generateOtpUri,
+        getDeletedItems,
+        restoreDeletedItem,
+        permanentDeleteItem
     }
 }
 
@@ -70,13 +74,64 @@ function updateOtpItem(item) {
     return false;
 }
 
-// 删除OTP项目
+// 删除OTP项目（移动到已删除列表）
 function deleteOtpItem(id) {
     const otpItems = getOtpItems();
     const index = otpItems.findIndex(i => i.id === id);
     if (index !== -1) {
+        // 获取要删除的项目
+        const deletedItem = { ...otpItems[index], deletedAt: new Date().toISOString() };
+        
+        // 从活跃列表中移除
         otpItems.splice(index, 1);
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        
+        // 添加到已删除列表
+        const deletedItems = getDeletedItems();
+        deletedItems.push(deletedItem);
+        db.setItem(DB_KEY_DELETED_ITEMS, deletedItems);
+        
+        return true;
+    }
+    return false;
+}
+
+// 获取已删除的OTP项目
+function getDeletedItems() {
+    const deletedItems = db.getItem(DB_KEY_DELETED_ITEMS) || [];
+    return deletedItems;
+}
+
+// 恢复已删除的OTP项目
+function restoreDeletedItem(id) {
+    const deletedItems = getDeletedItems();
+    const index = deletedItems.findIndex(i => i.id === id);
+    if (index !== -1) {
+        // 获取要恢复的项目
+        const restoredItem = { ...deletedItems[index] };
+        delete restoredItem.deletedAt; // 移除删除时间戳
+        
+        // 从已删除列表中移除
+        deletedItems.splice(index, 1);
+        db.setItem(DB_KEY_DELETED_ITEMS, deletedItems);
+        
+        // 添加回活跃列表
+        const otpItems = getOtpItems();
+        otpItems.push(restoredItem);
+        db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        
+        return true;
+    }
+    return false;
+}
+
+// 永久删除OTP项目
+function permanentDeleteItem(id) {
+    const deletedItems = getDeletedItems();
+    const index = deletedItems.findIndex(i => i.id === id);
+    if (index !== -1) {
+        deletedItems.splice(index, 1);
+        db.setItem(DB_KEY_DELETED_ITEMS, deletedItems);
         return true;
     }
     return false;
