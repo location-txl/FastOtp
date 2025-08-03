@@ -282,8 +282,13 @@ const OtpCard: React.FC<OtpCardProps> = ({
             setShowRemarkModal(false);
           }}
           footer={null}
+          onClick={(e) => e.stopPropagation()}
+          maskClosable={true}
+          style={{ pointerEvents: 'auto' }}
         >
-          <p>{item.remark}</p>
+          <div onClick={(e) => e.stopPropagation()}>
+            <p>{item.remark}</p>
+          </div>
         </Modal>
       )}
     </Card>
