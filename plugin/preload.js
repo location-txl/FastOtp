@@ -23,7 +23,9 @@ window.api = {
         parseOtpUri,
         importOtpUri,
         importOtpTextFile,
-        importOtpFromFile
+        importOtpFromFile,
+        exportOtpToFile,
+        generateOtpUri
     }
 }
 
@@ -161,6 +163,7 @@ function parseOtpUri(uri) {
         const period = parseInt(params.get('period') || '30', 10);
         const algorithm = (params.get('algorithm') || 'SHA1').toUpperCase();
         const counter = type === 'hotp' ? parseInt(params.get('counter') || '0', 10) : 0;
+        const remark = params.get('remark') || '';
         
         // 忽略非标准参数，如 codeDisplay
         
@@ -172,7 +175,8 @@ function parseOtpUri(uri) {
             digits,
             period,
             algorithm,
-            counter
+            counter,
+            remark
         };
     } catch (error) {
         console.error('解析 OTP URI 失败:', error);
@@ -206,11 +210,22 @@ function importOtpTextFile(text) {
         throw new Error('文本内容无效');
     }
     
-    // 按行分割文本
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
+    // 移除UTF-8 BOM（如果存在）
+    let cleanText = text;
+    // 检查字符串形式的BOM (\uFEFF) 或 Buffer形式的BOM
+    if (text.charCodeAt(0) === 0xFEFF) {
+        cleanText = text.slice(1);
+    } else if (text.startsWith('\uFEFF')) {
+        cleanText = text.slice(1);
+    }
+    
+    // 按行分割文本，过滤空行和注释行
+    const lines = cleanText.split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
     
     if (lines.length === 0) {
-        throw new Error('文件内容为空');
+        throw new Error('文件中没有有效的OTP URI');
     }
     
     const results = {
@@ -267,6 +282,147 @@ function importOtpFromFile(filePath) {
     } catch (error) {
         console.error('从文件导入OTP失败:', error);
         throw error;
+    }
+}
+
+// 生成OTP URI
+function generateOtpUri(item) {
+    try {
+        if (!item.secret) {
+            throw new Error('缺少必要的 secret 参数');
+        }
+        
+        // 构建基础URI
+        const type = item.type || 'totp';
+        let label = '';
+        
+        // 构建标签 (issuer:account 或者 name)
+        if (item.issuer && item.account) {
+            label = `${item.issuer}:${item.account}`;
+        } else if (item.issuer && item.name) {
+            label = `${item.issuer}:${item.name}`;
+        } else if (item.name) {
+            label = item.name;
+        } else {
+            label = 'Account';
+        }
+        
+        // URL编码标签
+        const encodedLabel = encodeURIComponent(label);
+        
+        // 构建查询参数
+        const params = new URLSearchParams();
+        params.set('secret', item.secret);
+        
+        if (item.issuer) {
+            params.set('issuer', item.issuer);
+        }
+        
+        if (item.digits && item.digits !== 6) {
+            params.set('digits', item.digits.toString());
+        }
+        
+        if (item.period && item.period !== 30) {
+            params.set('period', item.period.toString());
+        }
+        
+        if (item.algorithm && item.algorithm !== 'SHA1') {
+            params.set('algorithm', item.algorithm);
+        }
+        
+        if (type === 'hotp' && item.counter !== undefined) {
+            params.set('counter', item.counter.toString());
+        }
+        
+        if (item.remark) {
+            params.set('remark', item.remark);
+        }
+        
+        // 构建完整URI
+        const uri = `otpauth://${type}/${encodedLabel}?${params.toString()}`;
+        
+        return uri;
+    } catch (error) {
+        console.error('生成OTP URI失败:', error);
+        throw new Error('生成OTP URI失败: ' + error.message);
+    }
+}
+
+// 导出OTP到文件
+function exportOtpToFile() {
+    try {
+        // 获取所有OTP项目
+        const otpItems = getOtpItems();
+        
+        if (otpItems.length === 0) {
+            throw new Error('没有可导出的验证器');
+        }
+        
+        // 生成导出内容，每行一个OTP URI，并对中文字符进行解码
+        const exportContent = otpItems.map(item => {
+            const uri = generateOtpUri(item);
+            // 解码URI中的中文字符，使其在文本文件中可读
+            return decodeURIComponent(uri);
+        }).join('\n');
+        
+        // 添加文件头说明
+        const fileHeader = [
+            '# FastOtp 验证器导出文件',
+            '# 此文件包含您的两步验证配置信息',
+            '# 每行一个 otpauth:// URI，可被其他OTP应用程序导入',
+            `# 导出时间: ${new Date().toLocaleString('zh-CN')}`,
+            `# 共导出 ${otpItems.length} 个验证器`,
+            '',
+            ''
+        ].join('\n');
+        
+        const fullContent = fileHeader + exportContent;
+        
+        // 使用uTools API显示保存对话框
+        const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const savePath = utools.showSaveDialog({
+            title: '导出OTP验证器',
+            defaultPath: `FastOtp_导出_${currentDate}.txt`,
+            filters: [
+                { name: '文本文件', extensions: ['txt'] }
+            ]
+        });
+        
+        if (!savePath) {
+            // 用户取消了保存
+            return { success: false, message: '用户取消了导出' };
+        }
+        
+        // 写入文件 - 尝试多种编码方式确保中文正确显示
+        try {
+            // 方法1: 使用UTF-8 BOM + Buffer
+            const utf8BOM = Buffer.from([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
+            const contentBuffer = Buffer.from(fullContent, 'utf8');
+            const finalBuffer = Buffer.concat([utf8BOM, contentBuffer]);
+            fs.writeFileSync(savePath, finalBuffer);
+        } catch (error) {
+            try {
+                // 方法2: 直接使用utf8编码
+                fs.writeFileSync(savePath, fullContent, { encoding: 'utf8' });
+            } catch (error2) {
+                // 方法3: 使用默认编码
+                fs.writeFileSync(savePath, fullContent);
+            }
+        }
+        
+        return {
+            success: true,
+            message: `成功导出 ${otpItems.length} 个验证器到文件`,
+            path: savePath,
+            count: otpItems.length
+        };
+        
+    } catch (error) {
+        console.error('导出OTP失败:', error);
+        return {
+            success: false,
+            message: '导出失败: ' + error.message
+        };
     }
 }
 

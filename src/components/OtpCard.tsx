@@ -1,10 +1,9 @@
-/// <reference path="../custom.d.ts" />
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Progress, Typography, Space, theme, Button, Modal } from 'antd';
 import { DeleteOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { messageRef } from '../App';
+import { OtpItem } from '../custom';
 import { DEFAULT_OTP_PERIOD } from '../constants';
-import type { OtpItem } from '../custom.d';
 
 const { Text, Title } = Typography;
 const { useToken } = theme;
@@ -277,13 +276,17 @@ const OtpCard: React.FC<OtpCardProps> = ({
         <Modal
           title="备注信息"
           open={showRemarkModal}
-          onCancel={(e) => {
+          onCancel={(e: React.MouseEvent<HTMLButtonElement>) => {
             e.stopPropagation();
             setShowRemarkModal(false);
           }}
           footer={null}
+          maskClosable={true}
+          style={{ pointerEvents: 'auto' }}
         >
-          <p>{item.remark}</p>
+          <div onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}>
+            <p>{item.remark}</p>
+          </div>
         </Modal>
       )}
     </Card>
