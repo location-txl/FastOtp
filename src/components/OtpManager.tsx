@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme,  } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined } from '@ant-design/icons';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
+import ChangelogModal from './ChangelogModal';
 import { messageRef } from '../App';
 import { DEFAULT_OTP_PERIOD } from '../constants';
 import { OtpItem } from '../custom';
@@ -20,6 +21,7 @@ const OtpManager: React.FC = () => {
   const [editItem, setEditItem] = useState<OtpItem | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importUri, setImportUri] = useState('');
+  const [changelogVisible, setChangelogVisible] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
   
@@ -95,10 +97,10 @@ const OtpManager: React.FC = () => {
 
   useEffect(() => {
     // 组件挂载后自动聚焦到容器，但只在没有模态框打开时
-    if (containerRef.current && !formVisible && !importModalVisible) {
+    if (containerRef.current && !formVisible && !importModalVisible && !changelogVisible) {
         containerRef.current.focus();
     }
-  }, [formVisible, importModalVisible]);
+  }, [formVisible, importModalVisible, changelogVisible]);
 
   useEffect(() => {
     // 重置引用数组大小以匹配当前项目数量
@@ -139,8 +141,8 @@ const OtpManager: React.FC = () => {
 
   // 使用React的onKeyDown事件处理键盘输入
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    // 如果表单或导入模态框打开，不处理键盘事件
-    if (formVisible || importModalVisible) return;
+    // 如果表单或导入模态框或更新日志打开，不处理键盘事件
+    if (formVisible || importModalVisible || changelogVisible) return;
     
     // 检查事件目标是否为输入框，如果是，则不处理键盘事件
     const target = event.target as HTMLElement;
@@ -495,6 +497,14 @@ const OtpManager: React.FC = () => {
                   disabled={otpItems.length === 0}
                 />
               </Tooltip>
+              <Tooltip title="查看更新日志">
+                <Button 
+                  type="text" 
+                  icon={<HistoryOutlined />} 
+                  onClick={() => setChangelogVisible(true)}
+                  size="small"
+                />
+              </Tooltip>
             </Space>
             
             {otpItems.length > 0 && (
@@ -558,6 +568,11 @@ const OtpManager: React.FC = () => {
           </Text>
         </div>
       </Modal>
+
+      <ChangelogModal 
+        open={changelogVisible}
+        onClose={() => setChangelogVisible(false)}
+      />
     </div>
   );
 };
