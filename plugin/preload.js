@@ -163,6 +163,7 @@ function parseOtpUri(uri) {
         const period = parseInt(params.get('period') || '30', 10);
         const algorithm = (params.get('algorithm') || 'SHA1').toUpperCase();
         const counter = type === 'hotp' ? parseInt(params.get('counter') || '0', 10) : 0;
+        const remark = params.get('remark') || '';
         
         // 忽略非标准参数，如 codeDisplay
         
@@ -174,7 +175,8 @@ function parseOtpUri(uri) {
             digits,
             period,
             algorithm,
-            counter
+            counter,
+            remark
         };
     } catch (error) {
         console.error('解析 OTP URI 失败:', error);
@@ -330,6 +332,10 @@ function generateOtpUri(item) {
         
         if (type === 'hotp' && item.counter !== undefined) {
             params.set('counter', item.counter.toString());
+        }
+        
+        if (item.remark) {
+            params.set('remark', item.remark);
         }
         
         // 构建完整URI
