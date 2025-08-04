@@ -14,6 +14,7 @@ export interface OtpItem {
     algorithm?: 'SHA1' | 'SHA256' | 'SHA512';
     type?: 'totp' | 'hotp';
     counter?: number;
+    deletedAt?: string; // ISO string timestamp for when item was deleted
 }
 
 interface ImportTextFileResult {
@@ -54,6 +55,9 @@ declare global {
                 importOtpFromFile: (filePath: string) => ImportTextFileResult;
                 exportOtpToFile: () => ExportResult;
                 generateOtpUri: (item: OtpItem) => string;
+                getDeletedItems: () => OtpItem[];
+                restoreDeletedItem: (id: string) => boolean;
+                permanentDeleteItem: (id: string) => boolean;
             }
         }
         utools?: {

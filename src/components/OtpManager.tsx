@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme,  } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List } from 'antd';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import ChangelogModal from './ChangelogModal';
@@ -22,6 +22,8 @@ const OtpManager: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importUri, setImportUri] = useState('');
   const [changelogVisible, setChangelogVisible] = useState(false);
+  const [deletedModalVisible, setDeletedModalVisible] = useState(false);
+  const [deletedItems, setDeletedItems] = useState<OtpItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
   
@@ -97,10 +99,10 @@ const OtpManager: React.FC = () => {
 
   useEffect(() => {
     // 组件挂载后自动聚焦到容器，但只在没有模态框打开时
-    if (containerRef.current && !formVisible && !importModalVisible && !changelogVisible) {
+    if (containerRef.current && !formVisible && !importModalVisible && !changelogVisible && !deletedModalVisible) {
         containerRef.current.focus();
     }
-  }, [formVisible, importModalVisible, changelogVisible]);
+  }, [formVisible, importModalVisible, changelogVisible, deletedModalVisible]);
 
   useEffect(() => {
     // 重置引用数组大小以匹配当前项目数量
@@ -135,14 +137,72 @@ const OtpManager: React.FC = () => {
       }
     }
   };
+
+  const loadDeletedItems = () => {
+    try {
+      const items = window.api.otp.getDeletedItems();
+      setDeletedItems(items);
+    } catch (error) {
+      console.error('加载已删除项目失败:', error);
+      if (messageRef.current) {
+        messageRef.current.error('加载已删除验证器列表失败');
+      }
+    }
+  };
+
+  const handleShowDeleted = () => {
+    loadDeletedItems();
+    setDeletedModalVisible(true);
+  };
+
+  const handleRestoreItem = (id: string) => {
+    try {
+      window.api.otp.restoreDeletedItem(id);
+      if (messageRef.current) {
+        messageRef.current.success('验证器已恢复');
+      }
+      loadDeletedItems();
+      loadOtpItems();
+    } catch (error) {
+      console.error('恢复验证器失败:', error);
+      if (messageRef.current) {
+        messageRef.current.error('恢复验证器失败');
+      }
+    }
+  };
+
+  const handlePermanentDelete = (id: string) => {
+    modal.confirm({
+      title: '确认永久删除',
+      icon: <ExclamationCircleFilled />,
+      content: '此操作不可恢复，确定要永久删除此验证器吗？',
+      okText: '永久删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk() {
+        try {
+          window.api.otp.permanentDeleteItem(id);
+          if (messageRef.current) {
+            messageRef.current.success('验证器已永久删除');
+          }
+          loadDeletedItems();
+        } catch (error) {
+          console.error('永久删除验证器失败:', error);
+          if (messageRef.current) {
+            messageRef.current.error('永久删除验证器失败');
+          }
+        }
+      }
+    });
+  };
   useEffect(() => {
     loadOtpItems();
   }, []);
 
   // 使用React的onKeyDown事件处理键盘输入
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    // 如果表单或导入模态框或更新日志打开，不处理键盘事件
-    if (formVisible || importModalVisible || changelogVisible) return;
+    // 如果表单或导入模态框或更新日志或已删除项目模态框打开，不处理键盘事件
+    if (formVisible || importModalVisible || changelogVisible || deletedModalVisible) return;
     
     // 检查事件目标是否为输入框，如果是，则不处理键盘事件
     const target = event.target as HTMLElement;
@@ -254,7 +314,7 @@ const OtpManager: React.FC = () => {
     modal.confirm({
       title: '确认删除',
       icon: <ExclamationCircleFilled />,
-      content: '删除后将无法恢复，确定要删除此验证器吗？',
+      content: '删除后将移到已删除列表，可以在"已删除验证器"中恢复或永久删除，确定要删除此验证器吗？',
       okText: '删除',
       okType: 'danger',
       cancelText: '取消',
@@ -262,7 +322,7 @@ const OtpManager: React.FC = () => {
         try {
           window.api.otp.deleteOtpItem(id);
           if (messageRef.current) {
-            messageRef.current.success('验证器已删除');
+            messageRef.current.success('验证器已移到已删除列表');
           }
           loadOtpItems();
         } catch (error) {
@@ -507,14 +567,25 @@ const OtpManager: React.FC = () => {
               </Tooltip>
             </Space>
             
-            {otpItems.length > 0 && (
-              <Tooltip title="使用↑↓键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
-                <Space size={4}>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>快捷键</Text>
-                  <QuestionCircleOutlined style={{ color: token.colorPrimary, fontSize: '14px' }} />
-                </Space>
+            <Space size={8}>
+              <Tooltip title="查看已删除的验证器">
+                <Button 
+                  type="text" 
+                  icon={<DeleteOutlined />} 
+                  onClick={handleShowDeleted}
+                  size="small"
+                />
               </Tooltip>
-            )}
+              
+              {otpItems.length > 0 && (
+                <Tooltip title="使用↑↓键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
+                  <Space size={4}>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>快捷键</Text>
+                    <QuestionCircleOutlined style={{ color: token.colorPrimary, fontSize: '14px' }} />
+                  </Space>
+                </Tooltip>
+              )}
+            </Space>
           </div>
         }
       >
@@ -573,6 +644,79 @@ const OtpManager: React.FC = () => {
         open={changelogVisible}
         onClose={() => setChangelogVisible(false)}
       />
+
+      <Modal
+        title="已删除的验证器"
+        open={deletedModalVisible}
+        onCancel={() => {
+          setDeletedModalVisible(false);
+          // 模态框关闭后，恢复容器焦点
+          setTimeout(() => {
+            if (containerRef.current) {
+              containerRef.current.focus();
+            }
+          }, 100);
+        }}
+        footer={null}
+        width={600}
+      >
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {deletedItems.length === 0 ? (
+            <Empty 
+              description="暂无已删除的验证器" 
+              style={{ marginTop: 20, marginBottom: 20 }}
+            />
+          ) : (
+            <List
+              dataSource={deletedItems}
+              renderItem={(item) => (
+                <List.Item
+                  actions={[
+                    <Tooltip title="恢复验证器">
+                      <Button
+                        type="text"
+                        icon={<UndoOutlined />}
+                        onClick={() => handleRestoreItem(item.id)}
+                        size="small"
+                      />
+                    </Tooltip>,
+                    <Tooltip title="永久删除">
+                      <Button
+                        type="text"
+                        icon={<DeleteFilled />}
+                        onClick={() => handlePermanentDelete(item.id)}
+                        size="small"
+                        danger
+                      />
+                    </Tooltip>
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <div>
+                        <Text strong>{item.issuer || '未知发行方'}</Text>
+                        {item.name && <Text type="secondary" style={{ marginLeft: 8 }}>- {item.name}</Text>}
+                      </div>
+                    }
+                    description={
+                      <div>
+                        {item.remark && (
+                          <div style={{ marginBottom: 4 }}>
+                            <Text type="secondary">{item.remark}</Text>
+                          </div>
+                        )}
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          删除时间: {item.deletedAt ? new Date(item.deletedAt).toLocaleString('zh-CN') : '未知'}
+                        </Text>
+                      </div>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };
