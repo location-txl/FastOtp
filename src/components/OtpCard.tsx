@@ -284,8 +284,10 @@ const OtpCard: React.FC<OtpCardProps> = ({
           maskClosable={true}
           style={{ pointerEvents: 'auto' }}
         >
-          <div onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}>
-            <p>{item.remark}</p>
+        <div onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}>
+            <pre style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontFamily: 'inherit', margin: 0 }}>
+              {item.remark}
+            </pre>
           </div>
         </Modal>
       )}
