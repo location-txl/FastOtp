@@ -9,6 +9,21 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: "1.3.0",
+    date: "2025-8-10",
+    features: [
+      "添加已删除验证器回收站功能，支持恢复误删的验证器",
+      "添加更新日志弹窗功能，方便查看版本更新内容",
+      "支持导出验证器到文件，便于数据备份和迁移"
+    ],
+    improvements: [
+      "优化备注弹窗显示效果，支持正确显示换行内容",
+    ],
+    bugfixes: [
+      "修复备注弹窗鼠标事件穿透问题",
+    ]
+  },
+  {
     version: "1.2.1",
     date: "2025-7-4",
     bugfixes: [
