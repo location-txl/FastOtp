@@ -2,9 +2,22 @@ console.log("preload.js loaded")
 
 const otpCode = require('./otp_code');
 const fs = require('fs');
+// 动态按需加载 ESM 包 webdav（CommonJS 中无法直接 require）
+let __webdavModule = null;
+async function importWebDav() {
+    if (__webdavModule) return __webdavModule;
+    try {
+        __webdavModule = await import('webdav');
+        return __webdavModule;
+    } catch (e) {
+        throw new Error('加载 WebDAV 模块失败: ' + (e && e.message ? e.message : String(e)));
+    }
+}
 
 const DB_KEY_OTP_ITEMS = 'otp_items';
 const DB_KEY_DELETED_ITEMS = 'deleted_otp_items';
+const DB_KEY_WEBDAV_CONFIG = 'webdav_config';
+const DB_KEY_AUTO_BACKUP_CONFIG = 'auto_backup_config';
 const db = utools.dbCryptoStorage || utools.dbStorage;
 
 
@@ -29,7 +42,16 @@ window.api = {
         generateOtpUri,
         getDeletedItems,
         restoreDeletedItem,
-        permanentDeleteItem
+        permanentDeleteItem,
+        // WebDAV 备份相关 API
+        getWebDavConfig,
+        saveWebDavConfig,
+        testWebDavConnection,
+        webdavBackup,
+        webdavRestore,
+        // 自动备份相关 API
+        getAutoBackupConfig,
+        setAutoBackupEnabled
     }
 }
 
@@ -59,6 +81,10 @@ function saveOtpItem(item) {
     const otpItems = getOtpItems();
     otpItems.push(item);
     db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+    
+    // 触发自动备份
+    setTimeout(() => triggerAutoBackupIfEnabled(), 100);
+    
     return item;
 }
 
@@ -69,6 +95,10 @@ function updateOtpItem(item) {
     if (index !== -1) {
         otpItems[index] = item;
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        
+        // 触发自动备份
+        setTimeout(() => triggerAutoBackupIfEnabled(), 100);
+        
         return true;
     }
     return false;
@@ -90,6 +120,9 @@ function deleteOtpItem(id) {
         const deletedItems = getDeletedItems();
         deletedItems.push(deletedItem);
         db.setItem(DB_KEY_DELETED_ITEMS, deletedItems);
+        
+        // 触发自动备份
+        setTimeout(() => triggerAutoBackupIfEnabled(), 100);
         
         return true;
     }
@@ -119,6 +152,9 @@ function restoreDeletedItem(id) {
         const otpItems = getOtpItems();
         otpItems.push(restoredItem);
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        
+        // 触发自动备份
+        setTimeout(() => triggerAutoBackupIfEnabled(), 100);
         
         return true;
     }
@@ -252,6 +288,9 @@ function importOtpUri(uri) {
         otpItems.push(item);
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
         
+        // 触发自动备份
+        setTimeout(() => triggerAutoBackupIfEnabled(), 100);
+        
         return item;
     } catch (error) {
         console.error('导入OTP URI失败:', error);
@@ -317,6 +356,9 @@ function importOtpTextFile(text) {
     // 只有成功导入至少一个才保存
     if (results.success > 0) {
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        
+        // 触发自动备份
+        setTimeout(() => triggerAutoBackupIfEnabled(), 100);
     }
     
     return results;
@@ -478,6 +520,211 @@ function exportOtpToFile() {
             success: false,
             message: '导出失败: ' + error.message
         };
+    }
+}
+
+// ================ 自动备份配置 ================
+
+function getAutoBackupConfig() {
+    const config = db.getItem(DB_KEY_AUTO_BACKUP_CONFIG) || {};
+    return {
+        enabled: config.enabled === true,
+        lastBackupAt: config.lastBackupAt || null
+    };
+}
+
+function setAutoBackupEnabled(enabled) {
+    try {
+        const current = db.getItem(DB_KEY_AUTO_BACKUP_CONFIG) || {};
+        const updated = {
+            ...current,
+            enabled: Boolean(enabled)
+        };
+        db.setItem(DB_KEY_AUTO_BACKUP_CONFIG, updated);
+        return { success: true, enabled: updated.enabled };
+    } catch (error) {
+        return { success: false, message: '设置自动备份失败: ' + error.message };
+    }
+}
+
+// 自动备份触发函数
+async function triggerAutoBackupIfEnabled() {
+    try {
+        const autoConfig = getAutoBackupConfig();
+        if (!autoConfig.enabled) {
+            return; // 自动备份未启用
+        }
+
+        const webdavConfig = getWebDavConfig();
+        if (!webdavConfig.url || !webdavConfig.username || !webdavConfig.hasPassword) {
+            return; // WebDAV 配置不完整
+        }
+
+        // 静默执行备份，不显示用户通知
+        const result = await webdavBackup();
+        if (result.success) {
+            // 更新最后备份时间
+            const current = db.getItem(DB_KEY_AUTO_BACKUP_CONFIG) || {};
+            current.lastBackupAt = new Date().toISOString();
+            db.setItem(DB_KEY_AUTO_BACKUP_CONFIG, current);
+        }
+    } catch (error) {
+        // 静默处理错误，避免打断用户操作
+        console.error('自动备份失败:', error);
+    }
+}
+
+// ================ WebDAV 备份/恢复 ================
+
+function getWebDavConfig() {
+    const stored = db.getItem(DB_KEY_WEBDAV_CONFIG) || {};
+    return {
+        url: stored.url || '',
+        username: stored.username || '',
+        remotePath: stored.remotePath || '/FastOtp/backup.txt',
+        hasPassword: !!stored.password
+    };
+}
+
+function saveWebDavConfig(config) {
+    try {
+        if (!config || typeof config !== 'object') {
+            throw new Error('配置无效');
+        }
+        const current = db.getItem(DB_KEY_WEBDAV_CONFIG) || {};
+        const next = {
+            url: typeof config.url === 'string' ? config.url.trim() : current.url || '',
+            username: typeof config.username === 'string' ? config.username.trim() : current.username || '',
+            remotePath: typeof config.remotePath === 'string' ? config.remotePath.trim() : (current.remotePath || '/FastOtp/backup.txt'),
+            password: current.password
+        };
+        if (typeof config.password === 'string' && config.password.length > 0) {
+            next.password = config.password;
+        }
+        if (!next.url) throw new Error('请填写 WebDAV 地址');
+        if (!next.username) throw new Error('请填写用户名');
+        if (!next.password) throw new Error('请填写密码');
+        if (!next.remotePath) next.remotePath = '/FastOtp/backup.txt';
+        db.setItem(DB_KEY_WEBDAV_CONFIG, next);
+        return { success: true, message: '已保存 WebDAV 配置' };
+    } catch (error) {
+        return { success: false, message: '保存失败: ' + error.message };
+    }
+}
+
+async function createWebDavClientOrThrow() {
+    const cfg = db.getItem(DB_KEY_WEBDAV_CONFIG) || {};
+    if (!cfg.url || !cfg.username || !cfg.password) {
+        throw new Error('请先在设置中填写完整的 WebDAV 配置');
+    }
+    try {
+        const { createClient } = await importWebDav();
+        if (typeof createClient !== 'function') {
+            throw new Error('未找到 createClient');
+        }
+        const client = createClient(cfg.url, {
+            username: cfg.username,
+            password: cfg.password,
+        });
+        return { client, cfg };
+    } catch (e) {
+        throw new Error('创建 WebDAV 客户端失败: ' + (e && e.message ? e.message : String(e)));
+    }
+}
+
+async function testWebDavConnection() {
+    try {
+        const { client } = await createWebDavClientOrThrow();
+        // 尝试访问根目录，验证凭据
+        await client.getDirectoryContents('/');
+        return { success: true, message: '连接成功' };
+    } catch (error) {
+        return { success: false, message: '连接失败: ' + (error.message || String(error)) };
+    }
+}
+
+function buildOtpExportText() {
+    const otpItems = getOtpItems();
+    if (otpItems.length === 0) {
+        throw new Error('没有可备份的验证器');
+    }
+    const exportContent = otpItems.map(item => {
+        const uri = generateOtpUri(item);
+        return decodeURIComponent(uri);
+    }).join('\n');
+    const header = [
+        '# FastOtp 验证器导出文件',
+        '# 每行一个 otpauth:// URI，可被其他OTP应用程序导入',
+        `# 导出时间: ${new Date().toLocaleString('zh-CN')}`,
+        `# 共导出 ${otpItems.length} 个验证器`,
+        '',
+        '',
+    ].join('\n');
+    return header + exportContent;
+}
+
+async function ensureRemoteDir(client, remotePath) {
+    // 仅在备份时确保目录存在
+    try {
+        const lastSlash = remotePath.lastIndexOf('/');
+        const dir = lastSlash > 0 ? remotePath.slice(0, lastSlash) : '/';
+        if (!dir || dir === '/') return; // 根目录默认存在
+        // 递归创建目录（如果 webdav 服务端支持）
+        if (typeof client.createDirectory === 'function') {
+            try {
+                await client.createDirectory(dir, { recursive: true });
+            } catch (_) {
+                // 某些服务端不支持 recursive，忽略错误
+            }
+        }
+    } catch (_) {
+        // 忽略目录处理错误，由后续写入报错
+    }
+}
+
+async function webdavBackup() {
+    try {
+        const { client, cfg } = await createWebDavClientOrThrow();
+        const content = buildOtpExportText();
+        const remotePath = cfg.remotePath || '/FastOtp/backup.txt';
+        await ensureRemoteDir(client, remotePath);
+        const utf8BOM = Buffer.from([0xEF, 0xBB, 0xBF]);
+        const contentBuffer = Buffer.from(content, 'utf8');
+        const finalBuffer = Buffer.concat([utf8BOM, contentBuffer]);
+        await client.putFileContents(remotePath, finalBuffer, { overwrite: true });
+        db.setItem('last_webdav_backup_at', new Date().toISOString());
+        return { success: true, message: '备份成功', path: remotePath, bytes: finalBuffer.length };
+    } catch (error) {
+        return { success: false, message: '备份失败: ' + (error.message || String(error)) };
+    }
+}
+
+async function webdavRestore() {
+    try {
+        const { client, cfg } = await createWebDavClientOrThrow();
+        const remotePath = cfg.remotePath || '/FastOtp/backup.txt';
+        const buf = await client.getFileContents(remotePath);
+        let text = '';
+        if (Buffer.isBuffer(buf)) {
+            // 去除可能的 BOM
+            if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+                text = buf.slice(3).toString('utf8');
+            } else {
+                text = buf.toString('utf8');
+            }
+        } else if (typeof buf === 'string') {
+            text = buf;
+        } else {
+            text = String(buf || '');
+        }
+
+        const result = importOtpTextFile(text);
+        if (result.success > 0) {
+            return { success: true, imported: result.success, failed: result.failed, errors: result.errors };
+        }
+        return { success: false, imported: 0, failed: result.failed, errors: result.errors };
+    } catch (error) {
+        return { success: false, imported: 0, failed: 0, errors: ['恢复失败: ' + (error.message || String(error))] };
     }
 }
 

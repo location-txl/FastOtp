@@ -30,6 +30,48 @@ interface ExportResult {
     count?: number;
 }
 
+interface WebDavConfigPublic {
+    url: string;
+    username: string;
+    remotePath: string;
+    hasPassword: boolean;
+}
+
+interface WebDavSaveResult {
+    success: boolean;
+    message: string;
+}
+
+interface WebDavTestResult {
+    success: boolean;
+    message: string;
+}
+
+interface WebDavBackupResult {
+    success: boolean;
+    message: string;
+    path?: string;
+    bytes?: number;
+}
+
+interface WebDavRestoreResult {
+    success: boolean;
+    imported: number;
+    failed: number;
+    errors?: string[];
+}
+
+interface AutoBackupConfig {
+    enabled: boolean;
+    lastBackupAt: string | null;
+}
+
+interface AutoBackupSetResult {
+    success: boolean;
+    enabled?: boolean;
+    message?: string;
+}
+
 declare global {
     interface Window {
         api: {
@@ -58,6 +100,15 @@ declare global {
                 getDeletedItems: () => OtpItem[];
                 restoreDeletedItem: (id: string) => boolean;
                 permanentDeleteItem: (id: string) => boolean;
+                // WebDAV 备份
+                getWebDavConfig: () => WebDavConfigPublic;
+                saveWebDavConfig: (cfg: { url?: string; username?: string; password?: string; remotePath?: string }) => WebDavSaveResult;
+                testWebDavConnection: () => Promise<WebDavTestResult>;
+                webdavBackup: () => Promise<WebDavBackupResult>;
+                webdavRestore: () => Promise<WebDavRestoreResult>;
+                // 自动备份
+                getAutoBackupConfig: () => AutoBackupConfig;
+                setAutoBackupEnabled: (enabled: boolean) => AutoBackupSetResult;
             }
         }
         utools?: {
@@ -85,6 +136,7 @@ declare global {
                 properties?: string[];
             }) => string[] | undefined;
             showNotification: (body: string, clickFeatureCode?: string) => boolean;
+            hideMainWindowTypeString?: (text: string) => boolean;
             [key: string]: any;
         }
     }

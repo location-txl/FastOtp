@@ -10,7 +10,7 @@
     }
   ],
   "development": {
-    "main": "http://localhost:5173"
+    "main": "http://localhost:5555"
   },
   "pluginSetting": {
     "single": true,

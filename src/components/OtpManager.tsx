@@ -10,6 +10,7 @@ import { OtpItem } from '../custom';
 import { useSubInput } from '../hooks/useSubInput';
 import PageLayout from './PageLayout';
 import OtpGroup from './OtpGroup';
+import WebDavSettings from './WebDavSettings';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -26,6 +27,7 @@ const OtpManager: React.FC = () => {
   const [deletedItems, setDeletedItems] = useState<OtpItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
+  // WebDAV 相关已移至 WebDavSettings 子组件
   
   // 添加共用计时器状态
   const [timeLeft, setTimeLeft] = useState(DEFAULT_OTP_PERIOD);
@@ -195,6 +197,8 @@ const OtpManager: React.FC = () => {
       }
     });
   };
+
+  // WebDAV 设置与备份/恢复已统一由 WebDavSettings 处理
   useEffect(() => {
     loadOtpItems();
   }, []);
@@ -557,6 +561,15 @@ const OtpManager: React.FC = () => {
                   disabled={otpItems.length === 0}
                 />
               </Tooltip>
+              <WebDavSettings
+                onAfterRestore={loadOtpItems}
+                onCloseFocus={() => {
+                  if (containerRef.current) {
+                    containerRef.current.focus();
+                  }
+                }}
+                canBackup={otpItems.length > 0}
+              />
               <Tooltip title="查看更新日志">
                 <Button 
                   type="text" 
@@ -644,6 +657,8 @@ const OtpManager: React.FC = () => {
         open={changelogVisible}
         onClose={() => setChangelogVisible(false)}
       />
+
+      {/* WebDAV 设置模态已抽离至 WebDavSettings 组件 */}
 
       <Modal
         title="已删除的验证器"

@@ -5,6 +5,9 @@ import react from '@vitejs/plugin-react-swc'
 export default defineConfig({
   plugins: [react()],
   base: './',
+  server: {
+    port: 5555
+  },
   build: {
     outDir: 'plugin/dist',
     chunkSizeWarningLimit: 1000,
