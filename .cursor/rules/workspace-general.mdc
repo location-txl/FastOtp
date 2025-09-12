@@ -1,0 +1,31 @@
+---
+alwaysApply: true
+description: 工作区通用规则（构建、开发约束、Cursor 使用）
+---
+
+## 开发与运行
+
+- 不要在会话中启动开发服务器（遵循用户要求），避免直接执行 `npm run`/`pnpm run`。
+- 构建由 Vite 与 TypeScript 负责，产物在 `plugin/dist`，插件入口配置见 [plugin/plugin.json](mdc:plugin/plugin.json)。
+- 仅通过规则引用 `mdc:` 链接指向仓库内文件，确保 Cursor 能正确跳转。
+
+## Cursor 规则文件
+
+- 规则文件放在 `.cursor/rules/*.mdc`，使用前置 Frontmatter：
+  - `alwaysApply: true|false`
+  - 或 `globs: *.ts,*.tsx` 等 Gitignore 风格通配
+  - `description: 简洁准确的说明`
+- 引用文件用 `[filename](mdc:path/to/filename)`，路径相对于仓库根目录。
+
+## 修改约束
+
+- UI 层仅能通过 `window.api.otp.*` 与 `window.utools` 访问系统能力；新增方法先实现桥接再补齐类型。
+- 不得在 UI 层引入 `fs` 等 Node 内置模块。
+- 任何涉及 `window.api` 的签名变化，必须同步更新 [src/custom.d.ts](mdc:src/custom.d.ts)。
+
+## 代码质量
+
+- 保持 ESLint 干净；提交前修复当前变更引入的问题。
+- 以小步提交与原子修改为主，避免无关重构与格式化。
+- 约束注释：只为复杂或“为什么”的地方写简明注释；避免冗余注释。
+
