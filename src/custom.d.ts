@@ -37,6 +37,13 @@ interface WebDavConfigPublic {
     hasPassword: boolean;
 }
 
+interface WebDavConfigWithPassword {
+    url: string;
+    username: string;
+    password: string;
+    remotePath: string;
+}
+
 interface WebDavSaveResult {
     success: boolean;
     message: string;
@@ -103,7 +110,7 @@ declare global {
                 // WebDAV 备份
                 getWebDavConfig: () => WebDavConfigPublic;
                 saveWebDavConfig: (cfg: { url?: string; username?: string; password?: string; remotePath?: string }) => WebDavSaveResult;
-                testWebDavConnection: () => Promise<WebDavTestResult>;
+                testWebDavConnection: (customConfig?: WebDavConfigWithPassword) => Promise<WebDavTestResult>;
                 webdavBackup: () => Promise<WebDavBackupResult>;
                 webdavRestore: () => Promise<WebDavRestoreResult>;
                 // 自动备份

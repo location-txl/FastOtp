@@ -632,9 +632,34 @@ async function createWebDavClientOrThrow() {
     }
 }
 
-async function testWebDavConnection() {
+async function testWebDavConnection(customConfig = null) {
     try {
-        const { client } = await createWebDavClientOrThrow();
+        let client, cfg;
+        if (customConfig) {
+            // 使用传入的自定义配置
+            if (!customConfig.url || !customConfig.username || !customConfig.password) {
+                throw new Error('请先填写完整的 WebDAV 配置');
+            }
+            try {
+                const { createClient } = await importWebDav();
+                if (typeof createClient !== 'function') {
+                    throw new Error('未找到 createClient');
+                }
+                client = createClient(customConfig.url, {
+                    username: customConfig.username,
+                    password: customConfig.password,
+                });
+                cfg = customConfig;
+            } catch (e) {
+                throw new Error('创建 WebDAV 客户端失败: ' + (e && e.message ? e.message : String(e)));
+            }
+        } else {
+            // 使用已保存的配置
+            const result = await createWebDavClientOrThrow();
+            client = result.client;
+            cfg = result.cfg;
+        }
+        
         // 尝试访问根目录，验证凭据
         await client.getDirectoryContents('/');
         return { success: true, message: '连接成功' };

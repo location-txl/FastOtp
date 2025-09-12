@@ -63,13 +63,41 @@ const WebDavSettings: React.FC<WebDavSettingsProps> = ({ onAfterRestore, onClose
   const handleTestConnection = async () => {
     setTesting(true);
     try {
-      const res = await window.api.otp.testWebDavConnection();
-      if (res.success) {
-        if (messageRef.current) messageRef.current.success('WebDAV 连接成功');
+      // 先验证表单，获取当前输入的配置
+      const values = await form.validateFields();
+      
+      // 构建测试配置，如果密码为空且hasPassword为true，则需要提示
+      const testConfig = {
+        url: values.url,
+        username: values.username,
+        password: values.password,
+        remotePath: values.remotePath
+      };
+      
+      // 如果密码为空且之前有密码，提示用户
+      if (!values.password && hasPassword) {
+        if (messageRef.current) messageRef.current.warning('密码为空，将使用已保存的密码进行测试');
+        // 使用已保存的配置进行测试
+        const res = await window.api.otp.testWebDavConnection();
+        if (res.success) {
+          if (messageRef.current) messageRef.current.success('WebDAV 连接成功');
+        } else {
+          if (messageRef.current) messageRef.current.error(res.message);
+        }
       } else {
-        if (messageRef.current) messageRef.current.error(res.message);
+        // 使用当前表单配置进行测试
+        const res = await window.api.otp.testWebDavConnection(testConfig);
+        if (res.success) {
+          if (messageRef.current) messageRef.current.success('WebDAV 连接成功');
+        } else {
+          if (messageRef.current) messageRef.current.error(res.message);
+        }
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'errorFields' in e) {
+        if (messageRef.current) messageRef.current.error('请先完善配置信息');
+        return;
+      }
       console.error('测试 WebDAV 连接失败:', e);
       if (messageRef.current) messageRef.current.error('测试连接失败');
     } finally {
