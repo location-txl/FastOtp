@@ -1,0 +1,63 @@
+---
+globs: plugin/**
+description: uTools 插件与 preload 桥接约定与 API 规范
+---
+
+## 作用域与能力边界
+
+- `preload.js` 负责：
+  - 暴露安全的渲染层 API：`window.api.otp.*`
+  - 读写加密存储：优先 `utools.dbCryptoStorage`，并进行一次性迁移。
+  - 访问 Node 能力（`fs` 等）与 uTools 能力（保存/打开对话框、复制、通知）。
+- UI 层禁止直接使用 Node 内置模块或非 `window.api` 的 uTools 能力。
+
+## 数据键与迁移
+
+- 活跃列表键：`otp_items`
+- 已删除列表键：`deleted_otp_items`
+- 读取逻辑：若存在 `dbStorage` 的旧值，迁移至 `dbCryptoStorage` 并清理旧值。
+
+## 暴露 API（必须与 [src/custom.d.ts](mdc:src/custom.d.ts) 对齐）
+
+- `otp.generateTOTP(secret, options)` / `otp.generateNextTOTP`：计算当前与下一周期 OTP。
+- `otp.getOtpItems()` / `otp.saveOtpItem(item)` / `otp.updateOtpItem(item)`
+- `otp.deleteOtpItem(id)`：仅从活跃列表移除并加入已删除列表（打上 `deletedAt`）。
+- `otp.getDeletedItems()` / `otp.restoreDeletedItem(id)` / `otp.permanentDeleteItem(id)`
+- `otp.parseOtpUri(uri)` / `otp.importOtpUri(uri)` / `otp.importOtpTextFile(text)` / `otp.importOtpFromFile(path)`
+- `otp.generateOtpUri(item)` / `otp.exportOtpToFile()`
+- `otp.copyToClipboard(text)`
+
+所有新增/变更 API，先改 [plugin/preload.js](mdc:plugin/preload.js) 再同步 [src/custom.d.ts](mdc:src/custom.d.ts)。
+
+## URI 解析与生成
+
+- 解析时：
+  - 校验协议前缀 `otpauth://` 与类型 `totp|hotp`。
+  - 路径部分手动 `decodeURIComponent`，解析 `issuer:name`。
+  - 查询参数手工解析至 Map，`secret` 必填，`issuer` 优先来自查询参数。
+  - 默认为 `digits=6`、`period=30`、`algorithm=SHA1`、`counter=0`。
+  - 忽略非标准参数（如展示类）。
+- 生成时：
+  - 标签优先 `issuer:account`，其次 `issuer:name`，再次 `name`，缺省为 `Account`。
+  - `issuer/digits/period/algorithm/counter/remark` 仅在非默认或存在时写入。
+
+## 导入/导出与编码
+
+- 文本导入：忽略空行与 `#` 注释，逐行解析，累计成功与错误。
+- 文件导入：`fs.readFileSync` 后复用文本导入逻辑。
+- 导出：
+  - 文件头部写明导出说明与统计。
+  - 写入 UTF-8 BOM 以兼容中文显示；失败时回退普通 utf8/默认编码。
+
+## 删除模型
+
+- `deleteOtpItem`：移动到 `deleted_otp_items`，并在条目上记录 `deletedAt`。
+- `restoreDeletedItem`：从删除列表移回活跃列表，并去除 `deletedAt`。
+- `permanentDeleteItem`：仅从删除列表移除。
+
+## 安全与鲁棒性
+
+- 任何对外错误需捕获并输出友好信息；不要将内部错误直接抛至 UI。
+- 确保 `crypto.randomUUID()` 可用；如需兼容性改造，统一封装。
+- 文件系统、对话框操作需处理用户取消与异常分支。
+

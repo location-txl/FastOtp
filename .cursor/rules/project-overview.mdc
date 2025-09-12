@@ -1,0 +1,49 @@
+---
+alwaysApply: true
+description: FastOtp 项目结构与入口指南
+---
+
+## 项目结构与关键入口
+
+- **运行形态**: 一个用于展示 OTP 二次验证码的 uTools 插件。
+- **构建与产物**: 使用 Vite 构建，产物输出到 `plugin/dist`，插件主入口由 `plugin/plugin.json` 指向。
+- **UI 技术栈**: React + Antd 5，按中文本地化。
+
+### 主要文件映射
+
+- **插件配置与运行**
+  - `plugin/plugin.json` → 插件 `main`、`preload`、`features`、开发入口等。
+  - `vite.config.ts` → `outDir: plugin/dist`、分包 `manualChunks`、`base: './'`。
+- **预加载与桥接**
+  - `plugin/preload.js` → 暴露 `window.api.otp.*`，负责存储、导入/导出、OTP 生成等 Node/uTools 能力桥接。
+  - `plugin/otp_code.js` → OTP 计算逻辑（被 `preload.js` 使用）。
+  - `src/custom.d.ts` → `window.api` 与 `window.utools` 的类型声明，新增/调整 API 必须同步更新。
+- **UI 入口与上下文**
+  - `src/main.tsx`、`index.html` → Web 入口。
+  - `src/App.tsx` → `ConfigProvider`/暗色主题/`PluginEnterContext` 注入。
+  - `src/hooks/PageEnterContext.ts`、`src/hooks/useSubInput.ts` → 插件进入上下文、子输入框管理。
+- **核心业务组件**
+  - `src/components/OtpManager.tsx` → 列表/计时/键盘交互/导入导出/删除与恢复。
+  - `src/components/OtpCard.tsx` → 当前与下一个 OTP 展示与复制、快捷键。
+  - `src/components/OtpGroup.tsx` → 发行方分组与选择。
+  - `src/components/PageLayout.tsx` → 顶/底布局、滚动区域自适应。
+  - `src/components/CustomMessage.tsx`、`src/components/ChangelogModal.tsx`、`src/components/OtpForm.tsx`。
+
+### 数据流与职责边界
+
+- UI 层通过 `window.api.otp.*` 调用，所有 Node 与 uTools 能力都封装在 [plugin/preload.js](mdc:plugin/preload.js)。
+- 存储优先使用 `utools.dbCryptoStorage`，并在首次读取时从 `dbStorage` 迁移（键：`otp_items`、`deleted_otp_items`）。
+- OTP 生成由 `generateTOTP` 与 `generateNextTOTP` 提供；复制与通知由 uTools API 负责。
+
+### 开发要点
+
+- 新增任何 `window.api.otp.*` 方法，务必同步更新 [src/custom.d.ts](mdc:src/custom.d.ts)。
+- UI 仅调用 `window.api` 与 `window.utools`，不要在 UI 层直接使用 Node 模块。
+- 构建后静态资源位于 [plugin/dist](mdc:plugin/dist/)，插件配置在 [plugin/plugin.json](mdc:plugin/plugin.json)。
+
+### 快速导航
+
+- 配置: [vite.config.ts](mdc:vite.config.ts) / [tsconfig.json](mdc:tsconfig.json) / [eslint.config.js](mdc:eslint.config.js)
+- 插件: [plugin/plugin.json](mdc:plugin/plugin.json) / [plugin/preload.js](mdc:plugin/preload.js)
+- UI: [src/App.tsx](mdc:src/App.tsx) / [src/components/OtpManager.tsx](mdc:src/components/OtpManager.tsx)
+
