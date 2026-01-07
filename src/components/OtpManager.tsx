@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List } from 'antd';
 import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled } from '@ant-design/icons';
 import OtpCard from './OtpCard';
@@ -10,6 +10,7 @@ import { OtpItem } from '../custom';
 import { useSubInput } from '../hooks/useSubInput';
 import PageLayout from './PageLayout';
 import OtpGroup from './OtpGroup';
+import { PluginEnterContext } from '../hooks/PageEnterContext';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -51,6 +52,8 @@ const OtpManager: React.FC = () => {
     true,
     ''
   );
+
+  const pageEnter = useContext(PluginEnterContext);
   
   // 使用useMemo缓存不同issuer分组的数据
 
@@ -96,6 +99,16 @@ const OtpManager: React.FC = () => {
       clearInterval(timerInterval);
     };
   }, [timeLeft]);
+
+  // 插件重新进入时，强制刷新一次验证码，避免后台停留导致的旧值
+  useEffect(() => {
+    if (!pageEnter) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const newTimeLeft = DEFAULT_OTP_PERIOD - (now % DEFAULT_OTP_PERIOD);
+    setTimeLeft(newTimeLeft);
+    setRefreshCounter(prev => prev + 1);
+  }, [pageEnter]);
 
   useEffect(() => {
     // 组件挂载后自动聚焦到容器，但只在没有模态框打开时
