@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Form, Input, InputNumber, List, Modal, Space, Switch, Tooltip, Typography } from 'antd';
+import { App, Button, Form, Input, InputNumber, List, Modal, Space, Switch, Tooltip, Typography } from 'antd';
 import { CloudDownloadOutlined, CloudUploadOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import type { WebdavBackupConfig, WebdavBackupItem } from '../custom';
 import { messageRef } from '../App';
@@ -41,6 +41,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, onRestored }) => {
   const [form] = Form.useForm<WebdavBackupConfig>();
+  const { modal } = App.useApp();
   const [testing, setTesting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -146,8 +147,13 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
   };
 
   const handleRestore = (item: WebdavBackupItem) => {
-    Modal.confirm({
+    if (import.meta.env.DEV) {
+      console.debug('[WebDAV] 点击恢复:', item);
+    }
+    modal.confirm({
       title: '确认恢复',
+      zIndex: 2000,
+      getContainer: () => document.getElementById('root') || document.body,
       content: (
         <div>
           <div>将用以下备份覆盖本地数据（活跃验证器 + 已删除列表）：</div>
@@ -164,6 +170,9 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
       cancelText: '取消',
       async onOk() {
         try {
+          if (import.meta.env.DEV) {
+            console.debug('[WebDAV] 确认恢复(onOk):', item.filename);
+          }
           const cfg = await saveConfig();
           if (!cfg.encryptPassword) {
             messageRef.current?.error('请先设置“备份加密密码”（仅本地保存）');
