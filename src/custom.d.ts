@@ -17,6 +17,36 @@ export interface OtpItem {
     deletedAt?: string; // ISO string timestamp for when item was deleted
 }
 
+export interface WebdavBackupConfig {
+    dirUrl: string;
+    username?: string;
+    password?: string;
+    encryptPassword?: string;
+    retention?: number; // 0 表示不自动清理
+    allowInsecure?: boolean; // 允许忽略 HTTPS 证书校验（不推荐）
+}
+
+export interface WebdavBackupItem {
+    filename: string;
+    createdAt: string;
+    size?: number;
+    schemaVersion?: number;
+}
+
+interface WebdavBackupTestResult {
+    success: boolean;
+    message: string;
+}
+
+interface WebdavBackupResult {
+    success: boolean;
+    message: string;
+    filename?: string;
+    createdAt?: string;
+    size?: number;
+    count?: number;
+}
+
 interface ImportTextFileResult {
     success: number;
     failed: number;
@@ -58,6 +88,14 @@ declare global {
                 getDeletedItems: () => OtpItem[];
                 restoreDeletedItem: (id: string) => boolean;
                 permanentDeleteItem: (id: string) => boolean;
+            },
+            backup: {
+                getWebdavConfig: () => WebdavBackupConfig;
+                setWebdavConfig: (config: WebdavBackupConfig) => boolean;
+                testWebdavConnection: () => Promise<WebdavBackupTestResult>;
+                createWebdavBackup: () => Promise<WebdavBackupResult>;
+                listWebdavBackups: () => Promise<WebdavBackupItem[]>;
+                restoreWebdavBackup: (filename: string) => Promise<WebdavBackupResult>;
             }
         }
         utools?: {

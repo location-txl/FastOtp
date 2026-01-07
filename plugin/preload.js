@@ -1,10 +1,12 @@
 console.log("preload.js loaded")
 
 const otpCode = require('./otp_code');
+const webdavBackup = require('./webdav_backup');
 const fs = require('fs');
 
 const DB_KEY_OTP_ITEMS = 'otp_items';
 const DB_KEY_DELETED_ITEMS = 'deleted_otp_items';
+const DB_KEY_WEBDAV_BACKUP_CONFIG = 'webdav_backup_config';
 const db = utools.dbCryptoStorage || utools.dbStorage;
 
 
@@ -30,6 +32,15 @@ window.api = {
         getDeletedItems,
         restoreDeletedItem,
         permanentDeleteItem
+    },
+
+    backup: {
+        getWebdavConfig,
+        setWebdavConfig,
+        testWebdavConnection,
+        createWebdavBackup,
+        listWebdavBackups,
+        restoreWebdavBackup
     }
 }
 
@@ -481,6 +492,77 @@ function exportOtpToFile() {
     }
 }
 
+function getWebdavConfig() {
+    return db.getItem(DB_KEY_WEBDAV_BACKUP_CONFIG) || {
+        dirUrl: '',
+        username: '',
+        password: '',
+        encryptPassword: '',
+        retention: 0,
+        allowInsecure: false,
+    };
+}
+
+function setWebdavConfig(config) {
+    if (!config || typeof config !== 'object') {
+        throw new Error('配置无效');
+    }
+    const next = {
+        dirUrl: String(config.dirUrl || ''),
+        username: String(config.username || ''),
+        password: String(config.password || ''),
+        encryptPassword: String(config.encryptPassword || ''),
+        retention: Number.isFinite(config.retention) ? Number(config.retention) : 0,
+        allowInsecure: !!config.allowInsecure,
+    };
+    db.setItem(DB_KEY_WEBDAV_BACKUP_CONFIG, next);
+    return true;
+}
+
+async function testWebdavConnection() {
+    try {
+        const config = getWebdavConfig();
+        return await webdavBackup.testConnection(config);
+    } catch (error) {
+        return { success: false, message: error?.message || '测试失败' };
+    }
+}
+
+async function listWebdavBackups() {
+    const config = getWebdavConfig();
+    return await webdavBackup.listBackups(config);
+}
+
+async function createWebdavBackup() {
+    try {
+        const config = getWebdavConfig();
+        const otpItems = getOtpItems();
+        const deletedItems = getDeletedItems();
+        return await webdavBackup.createBackup(config, { otpItems, deletedItems });
+    } catch (error) {
+        return { success: false, message: error?.message || '备份失败' };
+    }
+}
+
+async function restoreWebdavBackup(filename) {
+    try {
+        if (!filename) throw new Error('备份文件名不能为空');
+        const config = getWebdavConfig();
+        const result = await webdavBackup.restoreBackup(config, filename);
+        const data = result.data;
+
+        db.setItem(DB_KEY_OTP_ITEMS, data.otpItems || []);
+        db.setItem(DB_KEY_DELETED_ITEMS, data.deletedItems || []);
+
+        return {
+            success: true,
+            message: '已从备份恢复本地数据',
+            count: (data.otpItems || []).length,
+        };
+    } catch (error) {
+        return { success: false, message: error?.message || '恢复失败' };
+    }
+}
 
 
 
