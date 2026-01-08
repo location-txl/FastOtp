@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List } from 'antd';
 import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled } from '@ant-design/icons';
 import OtpCard from './OtpCard';
@@ -10,10 +10,16 @@ import { OtpItem } from '../custom';
 import { useSubInput } from '../hooks/useSubInput';
 import PageLayout from './PageLayout';
 import OtpGroup from './OtpGroup';
+import { PluginEnterContext } from '../hooks/PageEnterContext';
 
 const { Text } = Typography;
 const { TextArea } = Input;
 const { useToken } = theme;
+
+const calculateTimeLeft = () => {
+  const now = Math.floor(Date.now() / 1000);
+  return DEFAULT_OTP_PERIOD - (now % DEFAULT_OTP_PERIOD);
+};
 
 const OtpManager: React.FC = () => {
   const [otpItems, setOtpItems] = useState<OtpItem[]>([]);
@@ -51,6 +57,8 @@ const OtpManager: React.FC = () => {
     true,
     ''
   );
+
+  const pageEnter = useContext(PluginEnterContext);
   
   // 使用useMemo缓存不同issuer分组的数据
 
@@ -72,14 +80,12 @@ const OtpManager: React.FC = () => {
   // 共用的计时器逻辑
   useEffect(() => {
     // 初始化：计算当前时间剩余
-    const now = Math.floor(Date.now() / 1000);
-    const initialTimeLeft = DEFAULT_OTP_PERIOD - (now % DEFAULT_OTP_PERIOD);
+    const initialTimeLeft = calculateTimeLeft();
     setTimeLeft(initialTimeLeft);
 
     // 设置全局计时器
     const timerInterval = setInterval(() => {
-      const currentTime = Math.floor(Date.now() / 1000);
-      const newTimeLeft = DEFAULT_OTP_PERIOD - (currentTime % DEFAULT_OTP_PERIOD);
+      const newTimeLeft = calculateTimeLeft();
       
       // 如果剩余时间改变，更新状态
       if (newTimeLeft !== timeLeft) {
@@ -96,6 +102,15 @@ const OtpManager: React.FC = () => {
       clearInterval(timerInterval);
     };
   }, [timeLeft]);
+
+  // 插件重新进入时，强制刷新一次验证码，避免后台停留导致的旧值
+  useEffect(() => {
+    if (!pageEnter) return;
+
+    const newTimeLeft = calculateTimeLeft();
+    setTimeLeft(newTimeLeft);
+    setRefreshCounter(prev => prev + 1);
+  }, [pageEnter]);
 
   useEffect(() => {
     // 组件挂载后自动聚焦到容器，但只在没有模态框打开时

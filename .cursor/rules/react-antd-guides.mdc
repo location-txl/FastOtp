@@ -1,0 +1,50 @@
+---
+globs: src/**/*.tsx
+description: React + Antd 使用规范、组件约定与可访问性/交互准则
+---
+
+## 主题与布局
+
+- 使用 `ConfigProvider` 与 `antd/locale/zh_CN`，深色模式优先使用 `window.utools.isDarkColors()`，否则回退媒体查询。
+- 页面采用 `PageLayout` 固定头/尾布局，内容区滚动；确保底部预留安全边距避免滚动条遮挡。
+
+## 组件约定
+
+- `OtpManager` 负责：
+  - 统一计时器（500ms 轮询）驱动所有 `OtpCard` 刷新。
+  - 键盘交互：↑/↓ 选择，Enter 复制并自动输入，Ctrl/⌘+1..9 快速复制选中卡片对应序号。
+  - 导入/导出/删除/恢复流程与反馈消息。
+- `OtpCard` 负责：
+  - 当前与下一周期 OTP 展示、复制按钮与快捷键，`onOtpGenerated` 将值回传父组件。
+  - 选中态边框与背景使用主题 token；尽量减少不必要重渲染（`React.memo`）。
+- `OtpGroup` 负责：
+  - issuer 聚合、规范化、切换；避免 `Radio.Group` 抢占焦点影响全局键盘导航。
+
+## Antd 使用细则
+
+- 模态交互：
+  - 关闭任一 `Modal` 后，使用 `setTimeout` 在 100ms 内将焦点还给主体容器，保持键盘流畅度。
+  - `Modal.confirm` 用于敏感操作（删除、永久删除），设置明确的 `okType="danger"`。
+- 反馈与消息：
+  - 使用 `CustomMessage` 统一管理消息；对失败场景提供明确提示。
+- 表单：
+  - 受控表单使用 `Form`，在 `OtpForm` 中固定为 TOTP/6 位/30 秒/SHA1，避免前端任意参数导致生成不一致。
+
+## 可访问性与交互
+
+- 键盘导航优先，不让 `Radio` 等控件吞掉方向键，交由页面容器处理。
+- 点击卡片或大标题可复制当前 OTP；提供可点击的“下一个” OTP 文本。
+- 当列表为空时，展示 `Empty`，并在搜索/分组语境下给出不同描述。
+
+## 与桥接 API 的交互
+
+- 所有 Node 与 uTools 能力经由 `window.api.otp.*` 和 `window.utools.*` 调用。
+- 复制后可根据环境调用 `window.utools.showNotification` 与 `hideMainWindowTypeString` 做自动输入。
+- 调用 `window.api.otp.*` 需包裹 `try/catch`，失败时走 `CustomMessage`。
+
+## 代码风格细则（React 层）
+
+- 使用 `useCallback`/`useMemo` 缓存关键函数与派生数据。
+- 儿子组件通过 props 接收 `timeLeft` 与 `refreshKey`，避免在每张卡片内多路定时器。
+- ref 数组管理子项 DOM，用于滚动定位当前选中项。
+
