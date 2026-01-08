@@ -505,13 +505,14 @@ async function getIndex(config) {
     const parsed = JSON.parse(json);
     if (parsed && Array.isArray(parsed.backups)) {
       if (parsed.version === 2 && Number.isFinite(parsed.updatedAt)) {
-        for (const item of parsed.backups) {
-          if (!item || typeof item !== 'object') return { version: 2, updatedAt: Date.now(), backups: [] };
-          if (typeof item.filename !== 'string' || !item.filename) {
-            return { version: 2, updatedAt: Date.now(), backups: [] };
-          }
-          if (!Number.isFinite(item.createdAt)) return { version: 2, updatedAt: Date.now(), backups: [] };
-        }
+        parsed.backups = parsed.backups.filter(
+          item =>
+            item &&
+            typeof item === 'object' &&
+            typeof item.filename === 'string' &&
+            item.filename &&
+            Number.isFinite(item.createdAt)
+        );
         return parsed;
       }
     }
