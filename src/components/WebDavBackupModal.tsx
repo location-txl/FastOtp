@@ -400,18 +400,18 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Space size={16}>
-                                <Form.Item name="autoBackup" valuePropName="checked" style={{ marginBottom: 0 }}>
-                                    <Space>
+                                <Space>
+                                    <Form.Item name="autoBackup" valuePropName="checked" style={{ marginBottom: 0 }}>
                                         <Switch size="small" />
-                                        <Text type="secondary" style={{ fontSize: '13px' }}>自动备份（OTP 变更后 1 秒）</Text>
-                                    </Space>
-                                </Form.Item>
-                                <Form.Item name="allowInsecure" valuePropName="checked" style={{ marginBottom: 0 }}>
-                                    <Space>
+                                    </Form.Item>
+                                    <Text type="secondary" style={{ fontSize: '13px' }}>自动备份</Text>
+                                </Space>
+                                <Space>
+                                    <Form.Item name="allowInsecure" valuePropName="checked" style={{ marginBottom: 0 }}>
                                         <Switch size="small" />
-                                        <Text type="secondary" style={{ fontSize: '13px' }}>允许不安全证书</Text>
-                                    </Space>
-                                </Form.Item>
+                                    </Form.Item>
+                                    <Text type="secondary" style={{ fontSize: '13px' }}>允许不安全证书</Text>
+                                </Space>
                             </Space>
 
                             <Space>
