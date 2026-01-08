@@ -2,12 +2,37 @@ console.log("preload.js loaded")
 
 const otpCode = require('./otp_code');
 const webdavBackup = require('./webdav_backup');
+const { createAutoBackupManager } = require('./auto_backup');
 const fs = require('fs');
 
 const DB_KEY_OTP_ITEMS = 'otp_items';
 const DB_KEY_DELETED_ITEMS = 'deleted_otp_items';
 const DB_KEY_WEBDAV_BACKUP_CONFIG = 'webdav_backup_config';
 const db = utools.dbCryptoStorage || utools.dbStorage;
+
+let webdavJobChain = Promise.resolve();
+function enqueueWebdavJob(jobFn) {
+    const next = webdavJobChain.then(jobFn);
+    webdavJobChain = next.catch(() => {});
+    return next;
+}
+
+const autoBackup = createAutoBackupManager({
+    getConfig: getWebdavConfig,
+    enqueueJob: enqueueWebdavJob,
+    createBackup: (config, payload) => webdavBackup.createBackup(config, payload),
+    getPayload: () => ({
+        otpItems: getOtpItems(),
+        deletedItems: getDeletedItems(),
+    }),
+    delayMs: 1000,
+});
+
+const getAutoBackupStatus = autoBackup.getStatus;
+const onAutoBackupStatusChange = autoBackup.onStatusChange;
+function scheduleAutoBackup(reason) {
+    autoBackup.schedule(reason);
+}
 
 
 
@@ -37,6 +62,8 @@ window.api = {
     backup: {
         getWebdavConfig,
         setWebdavConfig,
+        getAutoBackupStatus,
+        onAutoBackupStatusChange,
         testWebdavConnection,
         createWebdavBackup,
         listWebdavBackups,
@@ -70,6 +97,7 @@ function saveOtpItem(item) {
     const otpItems = getOtpItems();
     otpItems.push(item);
     db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+    scheduleAutoBackup('saveOtpItem');
     return item;
 }
 
@@ -80,6 +108,7 @@ function updateOtpItem(item) {
     if (index !== -1) {
         otpItems[index] = item;
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        scheduleAutoBackup('updateOtpItem');
         return true;
     }
     return false;
@@ -101,6 +130,7 @@ function deleteOtpItem(id) {
         const deletedItems = getDeletedItems();
         deletedItems.push(deletedItem);
         db.setItem(DB_KEY_DELETED_ITEMS, deletedItems);
+        scheduleAutoBackup('deleteOtpItem');
         
         return true;
     }
@@ -130,6 +160,7 @@ function restoreDeletedItem(id) {
         const otpItems = getOtpItems();
         otpItems.push(restoredItem);
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        scheduleAutoBackup('restoreDeletedItem');
         
         return true;
     }
@@ -143,6 +174,7 @@ function permanentDeleteItem(id) {
     if (index !== -1) {
         deletedItems.splice(index, 1);
         db.setItem(DB_KEY_DELETED_ITEMS, deletedItems);
+        scheduleAutoBackup('permanentDeleteItem');
         return true;
     }
     return false;
@@ -262,6 +294,7 @@ function importOtpUri(uri) {
         const otpItems = getOtpItems();
         otpItems.push(item);
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        scheduleAutoBackup('importOtpUri');
         
         return item;
     } catch (error) {
@@ -328,6 +361,7 @@ function importOtpTextFile(text) {
     // 只有成功导入至少一个才保存
     if (results.success > 0) {
         db.setItem(DB_KEY_OTP_ITEMS, otpItems);
+        scheduleAutoBackup('importOtpTextFile');
     }
     
     return results;
@@ -493,13 +527,16 @@ function exportOtpToFile() {
 }
 
 function getWebdavConfig() {
-    return db.getItem(DB_KEY_WEBDAV_BACKUP_CONFIG) || {
-        dirUrl: '',
-        username: '',
-        password: '',
-        encryptPassword: '',
-        retention: 0,
-        allowInsecure: false,
+    const raw = db.getItem(DB_KEY_WEBDAV_BACKUP_CONFIG);
+    const cfg = raw && typeof raw === 'object' ? raw : {};
+    return {
+        dirUrl: typeof cfg.dirUrl === 'string' ? cfg.dirUrl : '',
+        username: typeof cfg.username === 'string' ? cfg.username : '',
+        password: typeof cfg.password === 'string' ? cfg.password : '',
+        encryptPassword: typeof cfg.encryptPassword === 'string' ? cfg.encryptPassword : '',
+        retention: Number.isFinite(cfg.retention) ? Number(cfg.retention) : 0,
+        autoBackup: typeof cfg.autoBackup === 'boolean' ? cfg.autoBackup : true,
+        allowInsecure: typeof cfg.allowInsecure === 'boolean' ? cfg.allowInsecure : false,
     };
 }
 
@@ -516,9 +553,14 @@ function setWebdavConfig(config) {
         retention: Number.isFinite(config.retention)
             ? Number(config.retention)
             : (Number.isFinite(prev.retention) ? Number(prev.retention) : 0),
+        autoBackup:
+            typeof config.autoBackup === 'boolean'
+                ? config.autoBackup
+                : (typeof prev.autoBackup === 'boolean' ? prev.autoBackup : true),
         allowInsecure: typeof config.allowInsecure === 'boolean' ? config.allowInsecure : !!prev.allowInsecure,
     };
     db.setItem(DB_KEY_WEBDAV_BACKUP_CONFIG, next);
+    autoBackup.syncWithConfig();
     return true;
 }
 
@@ -545,10 +587,12 @@ async function listWebdavBackups(configOverride) {
 
 async function createWebdavBackup(configOverride) {
     try {
-        const config = resolveWebdavConfig(configOverride);
-        const otpItems = getOtpItems();
-        const deletedItems = getDeletedItems();
-        return await webdavBackup.createBackup(config, { otpItems, deletedItems });
+        return await enqueueWebdavJob(async () => {
+            const config = resolveWebdavConfig(configOverride);
+            const otpItems = getOtpItems();
+            const deletedItems = getDeletedItems();
+            return await webdavBackup.createBackup(config, { otpItems, deletedItems });
+        });
     } catch (error) {
         return { success: false, message: error?.message || '备份失败' };
     }
@@ -563,6 +607,7 @@ async function restoreWebdavBackup(filename, configOverride) {
 
         db.setItem(DB_KEY_OTP_ITEMS, data.otpItems || []);
         db.setItem(DB_KEY_DELETED_ITEMS, data.deletedItems || []);
+        scheduleAutoBackup('restoreWebdavBackup');
 
         return {
             success: true,
@@ -573,9 +618,3 @@ async function restoreWebdavBackup(filename, configOverride) {
         return { success: false, message: error?.message || '恢复失败' };
     }
 }
-
-
-
-
-
-

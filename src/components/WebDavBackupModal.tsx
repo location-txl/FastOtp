@@ -77,6 +77,7 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
       password: '',
       encryptPassword: '',
       retention: 0,
+      autoBackup: true,
       allowInsecure: false,
     }),
     []
@@ -125,6 +126,7 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
         password: typeof merged.password === 'string' ? merged.password : '',
         encryptPassword: typeof merged.encryptPassword === 'string' ? merged.encryptPassword : '',
         retention: Number.isFinite(Number(merged.retention)) ? Number(merged.retention) : 0,
+        autoBackup: merged.autoBackup !== false,
         allowInsecure: !!merged.allowInsecure,
       };
     },
@@ -158,6 +160,7 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
       saved.password !== current.password ||
       saved.encryptPassword !== current.encryptPassword ||
       saved.retention !== current.retention ||
+      saved.autoBackup !== current.autoBackup ||
       saved.allowInsecure !== current.allowInsecure
     );
   }, [form, getSavedConfig, normalizeConfig]);
@@ -412,12 +415,20 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
                         </Space>
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Form.Item name="allowInsecure" valuePropName="checked" style={{ marginBottom: 0 }}>
-                                <Space>
-                                    <Switch size="small" />
-                                    <Text type="secondary" style={{ fontSize: '13px' }}>允许不安全证书</Text>
-                                </Space>
-                            </Form.Item>
+                            <Space size={16}>
+                                <Form.Item name="autoBackup" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                    <Space>
+                                        <Switch size="small" />
+                                        <Text type="secondary" style={{ fontSize: '13px' }}>自动备份（OTP 变更后 1 秒）</Text>
+                                    </Space>
+                                </Form.Item>
+                                <Form.Item name="allowInsecure" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                    <Space>
+                                        <Switch size="small" />
+                                        <Text type="secondary" style={{ fontSize: '13px' }}>允许不安全证书</Text>
+                                    </Space>
+                                </Form.Item>
+                            </Space>
 
                             <Space>
                                 <Button size="small" icon={<ApiOutlined />} onClick={handleTest} loading={testing}>

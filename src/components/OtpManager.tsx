@@ -32,6 +32,7 @@ const OtpManager: React.FC = () => {
   const [deletedModalVisible, setDeletedModalVisible] = useState(false);
   const [deletedItems, setDeletedItems] = useState<OtpItem[]>([]);
   const [webdavBackupVisible, setWebdavBackupVisible] = useState(false);
+  const [autoBackupStatus, setAutoBackupStatus] = useState({ running: false, scheduled: false });
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
   
@@ -61,7 +62,14 @@ const OtpManager: React.FC = () => {
   );
 
   const pageEnter = useContext(PluginEnterContext);
-  
+  useEffect(() => {
+    const getStatus = window.api?.backup?.getAutoBackupStatus;
+    const onStatusChange = window.api?.backup?.onAutoBackupStatusChange;
+    if (!getStatus || !onStatusChange) return;
+
+    setAutoBackupStatus(getStatus());
+    return onStatusChange((status) => setAutoBackupStatus(status));
+  }, []);
   // 使用useMemo缓存不同issuer分组的数据
 
   
@@ -574,10 +582,10 @@ const OtpManager: React.FC = () => {
                   disabled={otpItems.length === 0}
                 />
               </Tooltip>
-              <Tooltip title="WebDAV 备份">
+              <Tooltip title={autoBackupStatus.running || autoBackupStatus.scheduled ? '自动备份中…' : 'WebDAV 备份'}>
                 <Button
                   type="text"
-                  icon={<CloudSyncOutlined />}
+                  icon={<CloudSyncOutlined spin={autoBackupStatus.running || autoBackupStatus.scheduled} />}
                   onClick={() => setWebdavBackupVisible(true)}
                   size="small"
                 />

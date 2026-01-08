@@ -23,6 +23,7 @@ export interface WebdavBackupConfig {
     password?: string;
     encryptPassword?: string;
     retention?: number; // 0 表示不自动清理
+    autoBackup?: boolean; // 默认开启：OTP 变更后自动备份
     allowInsecure?: boolean; // 允许忽略 HTTPS 证书校验（不推荐）
 }
 
@@ -45,6 +46,11 @@ interface WebdavBackupResult {
     createdAt?: number; // 毫秒时间戳
     size?: number;
     count?: number;
+}
+
+interface AutoBackupStatus {
+    running: boolean;
+    scheduled: boolean;
 }
 
 interface ImportTextFileResult {
@@ -92,6 +98,8 @@ declare global {
             backup: {
                 getWebdavConfig: () => WebdavBackupConfig;
                 setWebdavConfig: (config: WebdavBackupConfig) => boolean;
+                getAutoBackupStatus: () => AutoBackupStatus;
+                onAutoBackupStatusChange: (listener: (status: AutoBackupStatus) => void) => () => void;
                 testWebdavConnection: (configOverride?: Partial<WebdavBackupConfig>) => Promise<WebdavBackupTestResult>;
                 createWebdavBackup: (configOverride?: Partial<WebdavBackupConfig>) => Promise<WebdavBackupResult>;
                 listWebdavBackups: (configOverride?: Partial<WebdavBackupConfig>) => Promise<WebdavBackupItem[]>;
