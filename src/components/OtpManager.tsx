@@ -16,6 +16,11 @@ const { Text } = Typography;
 const { TextArea } = Input;
 const { useToken } = theme;
 
+const calculateTimeLeft = () => {
+  const now = Math.floor(Date.now() / 1000);
+  return DEFAULT_OTP_PERIOD - (now % DEFAULT_OTP_PERIOD);
+};
+
 const OtpManager: React.FC = () => {
   const [otpItems, setOtpItems] = useState<OtpItem[]>([]);
   const [formVisible, setFormVisible] = useState(false);
@@ -75,14 +80,12 @@ const OtpManager: React.FC = () => {
   // 共用的计时器逻辑
   useEffect(() => {
     // 初始化：计算当前时间剩余
-    const now = Math.floor(Date.now() / 1000);
-    const initialTimeLeft = DEFAULT_OTP_PERIOD - (now % DEFAULT_OTP_PERIOD);
+    const initialTimeLeft = calculateTimeLeft();
     setTimeLeft(initialTimeLeft);
 
     // 设置全局计时器
     const timerInterval = setInterval(() => {
-      const currentTime = Math.floor(Date.now() / 1000);
-      const newTimeLeft = DEFAULT_OTP_PERIOD - (currentTime % DEFAULT_OTP_PERIOD);
+      const newTimeLeft = calculateTimeLeft();
       
       // 如果剩余时间改变，更新状态
       if (newTimeLeft !== timeLeft) {
@@ -104,8 +107,7 @@ const OtpManager: React.FC = () => {
   useEffect(() => {
     if (!pageEnter) return;
 
-    const now = Math.floor(Date.now() / 1000);
-    const newTimeLeft = DEFAULT_OTP_PERIOD - (now % DEFAULT_OTP_PERIOD);
+    const newTimeLeft = calculateTimeLeft();
     setTimeLeft(newTimeLeft);
     setRefreshCounter(prev => prev + 1);
   }, [pageEnter]);
