@@ -36,12 +36,9 @@ interface WebDavBackupModalProps {
   onRestored?: () => void;
 }
 
-const formatTime = (iso: string) => {
-  try {
-    return new Date(iso).toLocaleString('zh-CN');
-  } catch {
-    return iso;
-  }
+const formatTime = (timestampMs: number) => {
+  if (!Number.isFinite(timestampMs)) return '';
+  return new Date(timestampMs).toLocaleString('zh-CN');
 };
 
 const formatSize = (bytes?: number) => {
@@ -88,8 +85,6 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
   const refreshList = useCallback(async () => {
     setListLoading(true);
     try {
-      // 尝试先验证表单，确保有配置
-      // 如果只是刷新，可以尝试读取内存中的配置（通过 saveConfig 确保了这一步）
       const list = await window.api.backup.listWebdavBackups();
       setBackups(Array.isArray(list) ? list : []);
     } catch (e: unknown) {
@@ -121,16 +116,83 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const saveConfig = useCallback(async () => {
+  const normalizeConfig = useCallback(
+    (cfg?: Partial<WebdavBackupConfig>): WebdavBackupConfig => {
+      const merged = { ...initialValues, ...(cfg || {}) };
+      return {
+        dirUrl: typeof merged.dirUrl === 'string' ? merged.dirUrl : '',
+        username: typeof merged.username === 'string' ? merged.username : '',
+        password: typeof merged.password === 'string' ? merged.password : '',
+        encryptPassword: typeof merged.encryptPassword === 'string' ? merged.encryptPassword : '',
+        retention: Number.isFinite(Number(merged.retention)) ? Number(merged.retention) : 0,
+        allowInsecure: !!merged.allowInsecure,
+      };
+    },
+    [initialValues]
+  );
+
+  const getSavedConfig = useCallback(() => {
+    return normalizeConfig(window.api.backup.getWebdavConfig());
+  }, [normalizeConfig]);
+
+  const getConfigFromFormForTest = useCallback(async () => {
+    const prev = window.api.backup.getWebdavConfig();
+    const values = await form.validateFields(['dirUrl', 'username', 'password', 'allowInsecure']);
+    return normalizeConfig({ ...prev, ...form.getFieldsValue(true), ...values });
+  }, [form, normalizeConfig]);
+
+  const persistConfigFromForm = useCallback(async () => {
+    const prev = window.api.backup.getWebdavConfig();
     const values = await form.validateFields();
-    window.api.backup.setWebdavConfig(values);
-    return values;
-  }, [form]);
+    const merged = normalizeConfig({ ...prev, ...values });
+    window.api.backup.setWebdavConfig(merged);
+    return merged;
+  }, [form, normalizeConfig]);
+
+  const hasUnsavedChanges = useCallback(() => {
+    const saved = getSavedConfig();
+    const current = normalizeConfig(form.getFieldsValue(true));
+    return (
+      saved.dirUrl !== current.dirUrl ||
+      saved.username !== current.username ||
+      saved.password !== current.password ||
+      saved.encryptPassword !== current.encryptPassword ||
+      saved.retention !== current.retention ||
+      saved.allowInsecure !== current.allowInsecure
+    );
+  }, [form, getSavedConfig, normalizeConfig]);
+
+  const confirmSaveBeforeOperate = useCallback(
+    async (actionName: string) => {
+      if (!hasUnsavedChanges()) return true;
+      return await new Promise<boolean>((resolve) => {
+        modal.confirm({
+          title: '配置有未保存的修改',
+          content: `检测到 WebDAV 配置有未保存的修改。为保证“${actionName}”使用已保存配置，请先保存。`,
+          okText: '先保存再操作',
+          cancelText: '取消',
+          async onOk() {
+            try {
+              await persistConfigFromForm();
+              resolve(true);
+            } catch (e: unknown) {
+              messageRef.current?.error(getErrorMessage(e, '保存失败'));
+              throw e;
+            }
+          },
+          onCancel() {
+            resolve(false);
+          },
+        });
+      });
+    },
+    [hasUnsavedChanges, modal, persistConfigFromForm]
+  );
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveConfig();
+      await persistConfigFromForm();
       messageRef.current?.success('WebDAV 配置已保存');
     } catch (e: unknown) {
       messageRef.current?.error(getErrorMessage(e, '保存失败'));
@@ -142,8 +204,13 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
   const handleTest = async () => {
     setTesting(true);
     try {
-      await saveConfig();
-      const res = await window.api.backup.testWebdavConnection();
+      const cfg = await getConfigFromFormForTest();
+      if (!cfg.dirUrl) {
+        messageRef.current?.error('请先设置 WebDAV 目录 URL');
+        setActiveCollapse(['config']);
+        return;
+      }
+      const res = await window.api.backup.testWebdavConnection(cfg);
       if (res.success) messageRef.current?.success(res.message);
       else messageRef.current?.error(res.message);
     } catch (e: unknown) {
@@ -156,7 +223,15 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
   const handleBackupNow = async () => {
     setBackingUp(true);
     try {
-      const cfg = await saveConfig();
+      const ok = await confirmSaveBeforeOperate('立即备份');
+      if (!ok) return;
+
+      const cfg = getSavedConfig();
+      if (!cfg.dirUrl) {
+        messageRef.current?.error('请先设置 WebDAV 目录 URL');
+        setActiveCollapse(['config']);
+        return;
+      }
       if (!cfg.encryptPassword) {
         messageRef.current?.error('请先设置“备份加密密码”');
         setActiveCollapse(['config']);
@@ -178,42 +253,77 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
   };
 
   const handleRefresh = async () => {
-      try {
-          await saveConfig();
-          await refreshList();
-      } catch (e) {
-          messageRef.current?.error(getErrorMessage(e, '刷新失败'));
+    try {
+      const ok = await confirmSaveBeforeOperate('刷新');
+      if (!ok) return;
+
+      const cfg = getSavedConfig();
+      if (!cfg.dirUrl) {
+        messageRef.current?.error('请先设置 WebDAV 目录 URL');
+        setActiveCollapse(['config']);
+        setBackups([]);
+        return;
       }
+
+      await refreshList();
+    } catch (e: unknown) {
+      messageRef.current?.error(getErrorMessage(e, '刷新失败'));
+    }
   };
 
-  const handleRestore = (item: WebdavBackupItem) => {
-    if (import.meta.env.DEV) {
-      console.debug('[WebDAV] 点击恢复:', item);
+  const handleRestore = async (item: WebdavBackupItem) => {
+    if (import.meta.env.DEV) console.debug('[WebDAV] 点击恢复:', item);
+
+    const ok = await confirmSaveBeforeOperate('恢复');
+    if (!ok) return;
+
+    const cfg = getSavedConfig();
+    if (!cfg.dirUrl) {
+      messageRef.current?.error('请先设置 WebDAV 目录 URL');
+      setActiveCollapse(['config']);
+      return;
     }
+    if (!cfg.encryptPassword) {
+      messageRef.current?.error('请先设置“备份加密密码”');
+      setActiveCollapse(['config']);
+      return;
+    }
+
     modal.confirm({
       title: '确认恢复',
       icon: <CloudDownloadOutlined style={{ color: '#faad14' }} />,
       content: (
         <div>
-          <Paragraph>
-            将用以下备份覆盖本地数据（活跃验证器 + 已删除列表）：
-          </Paragraph>
-          <div style={{ background: 'rgba(0,0,0,0.02)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.06)' }}>
-             <Space direction="vertical" size={0} style={{ width: '100%' }}>
-                <Space>
-                    <FileZipOutlined />
-                    <Text strong style={{ wordBreak: 'break-all' }}>{item.filename}</Text>
-                </Space>
-                <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {formatTime(item.createdAt)}
-                    </Text>
-                    {item.size && <Text type="secondary" style={{ fontSize: '12px' }}>{formatSize(item.size)}</Text>}
-                </div>
-             </Space>
+          <Paragraph>将用以下备份覆盖本地数据（活跃验证器 + 已删除列表）：</Paragraph>
+          <div
+            style={{
+              background: 'rgba(0,0,0,0.02)',
+              padding: '12px',
+              borderRadius: '6px',
+              border: '1px solid rgba(0,0,0,0.06)',
+            }}
+          >
+            <Space direction="vertical" size={0} style={{ width: '100%' }}>
+              <Space>
+                <FileZipOutlined />
+                <Text strong style={{ wordBreak: 'break-all' }}>
+                  {item.filename}
+                </Text>
+              </Space>
+              <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  {formatTime(item.createdAt)}
+                </Text>
+                {item.size && (
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    {formatSize(item.size)}
+                  </Text>
+                )}
+              </div>
+            </Space>
           </div>
           <Paragraph type="warning" style={{ marginTop: 12, marginBottom: 0 }}>
-             注意：恢复操作不可撤销，建议先备份当前数据。
+            注意：恢复操作不可撤销，建议先备份当前数据。
           </Paragraph>
         </div>
       ),
@@ -222,12 +332,6 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
       cancelText: '取消',
       async onOk() {
         try {
-          const cfg = await saveConfig();
-          if (!cfg.encryptPassword) {
-            messageRef.current?.error('请先设置“备份加密密码”');
-            setActiveCollapse(['config']);
-            return;
-          }
           const res = await window.api.backup.restoreWebdavBackup(item.filename);
           if (res.success) {
             messageRef.current?.success(res.message);

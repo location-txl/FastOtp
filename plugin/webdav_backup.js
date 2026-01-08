@@ -331,12 +331,25 @@ async function ensureDir(config) {
   }
 }
 
-function createBackupFilename(isoTime) {
-  const safe = (isoTime || new Date().toISOString())
-    .replace(/\.\d{3}Z$/, 'Z')
-    .replace(/[:-]/g, '')
-    .replace('T', '_');
-  return `FastOtp_backup_${safe}.zip`;
+function createBackupFilename(createdAtMs) {
+  // 文件名更适合展示“本地时间”，避免时区误解（文件名不额外附加时区信息）。
+  return `FastOtp_backup_${formatLocalTimestampForFilename(createdAtMs)}.zip`;
+}
+
+function formatLocalTimestampForFilename(timestampMs) {
+  if (!Number.isFinite(timestampMs)) throw new Error('时间戳无效：必须是毫秒时间戳（number）');
+  const d = new Date(timestampMs);
+  if (!Number.isFinite(d.getTime())) throw new Error('时间戳无效：无法转换为有效日期');
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const MM = pad2(d.getMonth() + 1);
+  const dd = pad2(d.getDate());
+  const HH = pad2(d.getHours());
+  const mm = pad2(d.getMinutes());
+  const ss = pad2(d.getSeconds());
+  const SSS = String(d.getMilliseconds()).padStart(3, '0');
+  return `${yyyy}${MM}${dd}_${HH}${mm}${ss}_${SSS}`;
 }
 
 function normalizeConfig(config) {
@@ -372,11 +385,14 @@ function generateOtpUri(item) {
   return `otpauth://${type}/${encodeURIComponent(label)}?${params.toString()}`;
 }
 
-function buildReadme(createdAt) {
-  return [
+function buildReadme(createdAtMs) {
+  const localTime = Number.isFinite(createdAtMs) ? new Date(createdAtMs).toLocaleString('zh-CN') : String(createdAtMs);
+  const utcIso = Number.isFinite(createdAtMs) ? new Date(createdAtMs).toISOString() : '';
+  const lines = [
     'FastOtp WebDAV 备份文件（AES-256 加密 ZIP）',
     '',
-    `导出时间: ${createdAt}`,
+    `导出时间（本地）: ${localTime}`,
+    utcIso ? `导出时间（UTC）: ${utcIso}` : null,
     '',
     '文件说明：',
     '- backup.json：完整数据（含备注、删除时间等元信息）',
@@ -392,7 +408,8 @@ function buildReadme(createdAt) {
     '- 文件名与部分元信息未加密（ZIP 格式限制），请勿把备份文件暴露给不可信环境。',
     '- 请务必使用足够强的密码；忘记密码将无法恢复。',
     '',
-  ].join('\n');
+  ];
+  return lines.filter((line) => line !== null).join('\n');
 }
 
 async function createEncryptedZipBuffer(files, password) {
@@ -470,8 +487,8 @@ async function getIndex(config) {
 
   if (res.status === 404) {
     return {
-      version: 1,
-      updatedAt: new Date().toISOString(),
+      version: 2,
+      updatedAt: Date.now(),
       backups: [],
     };
   }
@@ -486,14 +503,25 @@ async function getIndex(config) {
   try {
     const json = res.body.toString('utf8');
     const parsed = JSON.parse(json);
-    if (parsed && Array.isArray(parsed.backups)) return parsed;
+    if (parsed && Array.isArray(parsed.backups)) {
+      if (parsed.version === 2 && Number.isFinite(parsed.updatedAt)) {
+        for (const item of parsed.backups) {
+          if (!item || typeof item !== 'object') return { version: 2, updatedAt: Date.now(), backups: [] };
+          if (typeof item.filename !== 'string' || !item.filename) {
+            return { version: 2, updatedAt: Date.now(), backups: [] };
+          }
+          if (!Number.isFinite(item.createdAt)) return { version: 2, updatedAt: Date.now(), backups: [] };
+        }
+        return parsed;
+      }
+    }
   } catch {
     // ignore
   }
 
   return {
-    version: 1,
-    updatedAt: new Date().toISOString(),
+    version: 2,
+    updatedAt: Date.now(),
     backups: [],
   };
 }
@@ -601,7 +629,7 @@ async function listBackups(config) {
   const index = await getIndex(cfg);
 
   const backups = Array.isArray(index.backups) ? index.backups : [];
-  backups.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  backups.sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
   return backups;
 }
 
@@ -609,9 +637,9 @@ async function createBackup(config, data) {
   const cfg = normalizeConfig(config);
   await ensureDir(cfg);
 
-  const createdAt = new Date().toISOString();
+  const createdAt = Date.now();
   const backupObject = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: createdAt,
     otpItems: data.otpItems || [],
     deletedItems: data.deletedItems || [],
@@ -641,8 +669,8 @@ async function createBackup(config, data) {
 
   const index = await getIndex(cfg);
   const next = {
-    version: 1,
-    updatedAt: new Date().toISOString(),
+    version: 2,
+    updatedAt: Date.now(),
     backups: Array.isArray(index.backups) ? index.backups.slice() : [],
   };
 
@@ -650,11 +678,11 @@ async function createBackup(config, data) {
     filename,
     createdAt,
     size: zipBuffer.length,
-    schemaVersion: 1,
+    schemaVersion: 2,
     format: 'aes256',
   });
 
-  next.backups.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  next.backups.sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
 
   if (cfg.retention > 0 && next.backups.length > cfg.retention) {
     const removed = next.backups.splice(cfg.retention);

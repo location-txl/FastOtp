@@ -28,7 +28,7 @@ export interface WebdavBackupConfig {
 
 export interface WebdavBackupItem {
     filename: string;
-    createdAt: string;
+    createdAt: number; // 毫秒时间戳
     size?: number;
     schemaVersion?: number;
 }
@@ -42,7 +42,7 @@ interface WebdavBackupResult {
     success: boolean;
     message: string;
     filename?: string;
-    createdAt?: string;
+    createdAt?: number; // 毫秒时间戳
     size?: number;
     count?: number;
 }
@@ -92,10 +92,10 @@ declare global {
             backup: {
                 getWebdavConfig: () => WebdavBackupConfig;
                 setWebdavConfig: (config: WebdavBackupConfig) => boolean;
-                testWebdavConnection: () => Promise<WebdavBackupTestResult>;
-                createWebdavBackup: () => Promise<WebdavBackupResult>;
-                listWebdavBackups: () => Promise<WebdavBackupItem[]>;
-                restoreWebdavBackup: (filename: string) => Promise<WebdavBackupResult>;
+                testWebdavConnection: (configOverride?: Partial<WebdavBackupConfig>) => Promise<WebdavBackupTestResult>;
+                createWebdavBackup: (configOverride?: Partial<WebdavBackupConfig>) => Promise<WebdavBackupResult>;
+                listWebdavBackups: (configOverride?: Partial<WebdavBackupConfig>) => Promise<WebdavBackupItem[]>;
+                restoreWebdavBackup: (filename: string, configOverride?: Partial<WebdavBackupConfig>) => Promise<WebdavBackupResult>;
             }
         }
         utools?: {
