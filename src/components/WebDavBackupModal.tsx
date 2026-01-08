@@ -5,15 +5,12 @@ import {
   Card,
   Collapse,
   Divider,
-  Empty,
   Form,
   Input,
   InputNumber,
-  List,
   Modal,
   Space,
   Switch,
-  Tag,
   Typography,
 } from 'antd';
 import {
@@ -21,34 +18,21 @@ import {
   CloudDownloadOutlined,
   CloudUploadOutlined,
   FileZipOutlined,
-  ReloadOutlined,
   SaveOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import type { WebdavBackupConfig, WebdavBackupItem } from '../custom';
 import { messageRef } from '../App';
+import WebDavBackupListSection from './webdavBackup/WebDavBackupListSection';
+import { formatSize, formatTime } from './webdavBackup/format';
 
-const { Text, Title, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 interface WebDavBackupModalProps {
   open: boolean;
   onClose: () => void;
   onRestored?: () => void;
 }
-
-const formatTime = (timestampMs: number) => {
-  if (!Number.isFinite(timestampMs)) return '';
-  return new Date(timestampMs).toLocaleString('zh-CN');
-};
-
-const formatSize = (bytes?: number) => {
-  if (!bytes || !Number.isFinite(bytes)) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  return `${mb.toFixed(1)} MB`;
-};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error) return error.message || fallback;
@@ -448,56 +432,14 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
 
       <Divider style={{ margin: '16px 0' }} />
 
-      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-         <Title level={5} style={{ margin: 0, fontSize: '15px' }}>备份列表</Title>
-         <Space>
-            <Button size="small" icon={<ReloadOutlined />} onClick={handleRefresh} loading={listLoading}>
-                刷新
-            </Button>
-            <Button size="small" type="primary" icon={<CloudUploadOutlined />} onClick={handleBackupNow} loading={backingUp}>
-                立即备份
-            </Button>
-         </Space>
-      </div>
-
-      <div style={{ height: '320px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '8px', background: 'rgba(0,0,0,0.01)' }}>
-        <List
-            loading={listLoading}
-            dataSource={backups}
-            locale={{
-                emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无备份" />
-            }}
-            renderItem={(item) => (
-                <List.Item
-                    actions={[
-                        <Button
-                            key="restore"
-                            type="link"
-                            size="small"
-                            icon={<CloudDownloadOutlined />}
-                            onClick={() => handleRestore(item)}
-                        >
-                            恢复
-                        </Button>
-                    ]}
-                    style={{ padding: '10px 16px' }}
-                >
-                    <List.Item.Meta
-                        avatar={<FileZipOutlined style={{ fontSize: '24px', color: '#1890ff', marginTop: 8 }} />}
-                        title={
-                             <Text style={{ fontSize: '14px' }}>{formatTime(item.createdAt)}</Text>
-                        }
-                        description={
-                            <Space size={8} style={{ fontSize: '12px' }} wrap>
-                                <Text type="secondary">{item.filename}</Text>
-                                {item.size ? <Tag bordered={false} style={{ margin: 0 }}>{formatSize(item.size)}</Tag> : null}
-                            </Space>
-                        }
-                    />
-                </List.Item>
-            )}
-        />
-      </div>
+      <WebDavBackupListSection
+        backups={backups}
+        listLoading={listLoading}
+        backingUp={backingUp}
+        onRefresh={handleRefresh}
+        onBackupNow={handleBackupNow}
+        onRestore={handleRestore}
+      />
     </Modal>
   );
 };
