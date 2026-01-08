@@ -1,10 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Form, Input, InputNumber, List, Modal, Space, Switch, Tooltip, Typography } from 'antd';
-import { CloudDownloadOutlined, CloudUploadOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  App,
+  Button,
+  Card,
+  Collapse,
+  Divider,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  List,
+  Modal,
+  Space,
+  Switch,
+  Tag,
+  Typography,
+} from 'antd';
+import {
+  ApiOutlined,
+  CloudDownloadOutlined,
+  CloudUploadOutlined,
+  FileZipOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import type { WebdavBackupConfig, WebdavBackupItem } from '../custom';
 import { messageRef } from '../App';
 
-const { Text } = Typography;
+const { Text, Title, Paragraph } = Typography;
 
 interface WebDavBackupModalProps {
   open: boolean;
@@ -47,6 +71,7 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
   const [listLoading, setListLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [backups, setBackups] = useState<WebdavBackupItem[]>([]);
+  const [activeCollapse, setActiveCollapse] = useState<string[]>([]);
 
   const initialValues = useMemo<WebdavBackupConfig>(
     () => ({
@@ -60,17 +85,35 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
     []
   );
 
+  const refreshList = useCallback(async () => {
+    setListLoading(true);
+    try {
+      // 尝试先验证表单，确保有配置
+      // 如果只是刷新，可以尝试读取内存中的配置（通过 saveConfig 确保了这一步）
+      const list = await window.api.backup.listWebdavBackups();
+      setBackups(Array.isArray(list) ? list : []);
+    } catch (e: unknown) {
+      console.warn('获取列表失败:', e);
+      // 如果是因为没配置导致的，静默失败或清空列表
+      setBackups([]);
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     try {
       const cfg = window.api.backup.getWebdavConfig();
       form.setFieldsValue({ ...initialValues, ...cfg });
-      if (cfg?.dirUrl) {
-        setTimeout(() => {
-          refreshList();
-        }, 0);
-      } else {
+
+      if (!cfg?.dirUrl) {
+        // 如果没有配置 URL，默认展开配置面板
+        setActiveCollapse(['config']);
         setBackups([]);
+      } else {
+        // 有配置，尝试刷新列表
+        refreshList();
       }
     } catch (e: unknown) {
       messageRef.current?.error(getErrorMessage(e, '读取 WebDAV 配置失败'));
@@ -110,25 +153,13 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
     }
   };
 
-  const refreshList = useCallback(async () => {
-    setListLoading(true);
-    try {
-      await saveConfig();
-      const list = await window.api.backup.listWebdavBackups();
-      setBackups(Array.isArray(list) ? list : []);
-    } catch (e: unknown) {
-      messageRef.current?.error(getErrorMessage(e, '获取备份列表失败'));
-    } finally {
-      setListLoading(false);
-    }
-  }, [saveConfig]);
-
   const handleBackupNow = async () => {
     setBackingUp(true);
     try {
       const cfg = await saveConfig();
       if (!cfg.encryptPassword) {
-        messageRef.current?.error('请先设置“备份加密密码”（仅本地保存）');
+        messageRef.current?.error('请先设置“备份加密密码”');
+        setActiveCollapse(['config']);
         return;
       }
 
@@ -146,36 +177,55 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
     }
   };
 
+  const handleRefresh = async () => {
+      try {
+          await saveConfig();
+          await refreshList();
+      } catch (e) {
+          messageRef.current?.error(getErrorMessage(e, '刷新失败'));
+      }
+  };
+
   const handleRestore = (item: WebdavBackupItem) => {
     if (import.meta.env.DEV) {
       console.debug('[WebDAV] 点击恢复:', item);
     }
     modal.confirm({
       title: '确认恢复',
-      zIndex: 2000,
-      getContainer: () => document.getElementById('root') || document.body,
+      icon: <CloudDownloadOutlined style={{ color: '#faad14' }} />,
       content: (
         <div>
-          <div>将用以下备份覆盖本地数据（活跃验证器 + 已删除列表）：</div>
-          <div style={{ marginTop: 8 }}>
-            <Text code>{formatTime(item.createdAt)}</Text>
+          <Paragraph>
+            将用以下备份覆盖本地数据（活跃验证器 + 已删除列表）：
+          </Paragraph>
+          <div style={{ background: 'rgba(0,0,0,0.02)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.06)' }}>
+             <Space direction="vertical" size={0} style={{ width: '100%' }}>
+                <Space>
+                    <FileZipOutlined />
+                    <Text strong style={{ wordBreak: 'break-all' }}>{item.filename}</Text>
+                </Space>
+                <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                        {formatTime(item.createdAt)}
+                    </Text>
+                    {item.size && <Text type="secondary" style={{ fontSize: '12px' }}>{formatSize(item.size)}</Text>}
+                </div>
+             </Space>
           </div>
-          <div style={{ marginTop: 4 }}>
-            <Text type="secondary">{item.filename}</Text>
-          </div>
+          <Paragraph type="warning" style={{ marginTop: 12, marginBottom: 0 }}>
+             注意：恢复操作不可撤销，建议先备份当前数据。
+          </Paragraph>
         </div>
       ),
-      okText: '恢复',
+      okText: '确认恢复',
       okType: 'danger',
       cancelText: '取消',
       async onOk() {
         try {
-          if (import.meta.env.DEV) {
-            console.debug('[WebDAV] 确认恢复(onOk):', item.filename);
-          }
           const cfg = await saveConfig();
           if (!cfg.encryptPassword) {
-            messageRef.current?.error('请先设置“备份加密密码”（仅本地保存）');
+            messageRef.current?.error('请先设置“备份加密密码”');
+            setActiveCollapse(['config']);
             return;
           }
           const res = await window.api.backup.restoreWebdavBackup(item.filename);
@@ -194,106 +244,143 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
 
   return (
     <Modal
-      title="WebDAV 备份"
+      title={
+        <Space>
+            <CloudUploadOutlined />
+            <span>WebDAV 云备份</span>
+        </Space>
+      }
       open={open}
       onCancel={onClose}
-      footer={[
-        <Button key="close" onClick={onClose}>
-          关闭
-        </Button>,
-        <Button key="save" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-          保存设置
-        </Button>,
-      ]}
-      width={760}
+      footer={null}
+      width={680}
+      styles={{ body: { padding: '16px 24px' } }}
     >
-      <Form form={form} layout="vertical" initialValues={initialValues}>
-        <Form.Item
-          name="dirUrl"
-          label="WebDAV 目录 URL"
-          rules={[{ required: true, message: '请输入 WebDAV 目录 URL（以 http(s) 开头）' }]}
-          extra="示例：https://example.com/dav/FastOtp/（目录不存在会尝试创建）"
-        >
-          <Input placeholder="https://example.com/dav/FastOtp/" />
-        </Form.Item>
+      <Collapse
+        activeKey={activeCollapse}
+        onChange={(keys) => setActiveCollapse(typeof keys === 'string' ? [keys] : keys)}
+        ghost
+        items={[
+            {
+                key: 'config',
+                label: <Space><SettingOutlined /><span>连接配置</span></Space>,
+                children: (
+                    <Card size="small" bordered={false} style={{ background: 'rgba(0,0,0,0.02)' }}>
+                    <Form form={form} layout="vertical" initialValues={initialValues}>
+                        <Form.Item
+                        name="dirUrl"
+                        label="WebDAV 目录 URL"
+                        rules={[{ required: true, message: '请输入 URL' }]}
+                        tooltip="例如：https://dav.box.com/dav/FastOtp/"
+                        style={{ marginBottom: 12 }}
+                        >
+                        <Input placeholder="https://example.com/dav/FastOtp/" prefix={<ApiOutlined style={{ color: 'rgba(0,0,0,0.25)' }} />} />
+                        </Form.Item>
 
-        <Space style={{ display: 'flex' }} size={12} align="start">
-          <Form.Item name="username" label="用户名" style={{ flex: 1 }}>
-            <Input placeholder="可留空（匿名）" autoComplete="username" />
-          </Form.Item>
-          <Form.Item name="password" label="密码" style={{ flex: 1 }}>
-            <Input.Password placeholder="可留空" autoComplete="current-password" />
-          </Form.Item>
-        </Space>
+                        <Space style={{ display: 'flex' }} size={16} align="start">
+                            <Form.Item name="username" label="用户名" style={{ flex: 1, marginBottom: 12 }}>
+                                <Input placeholder="可选" autoComplete="username" />
+                            </Form.Item>
+                            <Form.Item name="password" label="密码" style={{ flex: 1, marginBottom: 12 }}>
+                                <Input.Password placeholder="可选" autoComplete="current-password" />
+                            </Form.Item>
+                        </Space>
 
-        <Space style={{ display: 'flex' }} size={12} align="start">
-          <Form.Item
-            name="encryptPassword"
-            label="备份加密密码"
-            style={{ flex: 1 }}
-            extra="仅保存在本地；备份文件为“AES-256 加密 ZIP”。建议用 FastOtp 恢复；外部解压请用 7-Zip/WinZip（部分系统自带解压工具/Windows 资源管理器不支持）。忘记密码将无法恢复。"
-          >
-            <Input.Password placeholder="建议设置一个独立密码" />
-          </Form.Item>
+                        <Space style={{ display: 'flex' }} size={16} align="start">
+                            <Form.Item
+                                name="encryptPassword"
+                                label="备份加密密码"
+                                style={{ flex: 1, marginBottom: 12 }}
+                                tooltip="文件使用 AES-256 加密。请务必牢记此密码，否则无法恢复备份。"
+                                rules={[{ required: true, message: '请设置加密密码' }]}
+                            >
+                                <Input.Password placeholder="用于加密备份文件" prefix={<SaveOutlined style={{ color: 'rgba(0,0,0,0.25)' }} />} />
+                            </Form.Item>
 
-          <Form.Item
-            name="retention"
-            label="保留份数"
-            style={{ width: 180 }}
-            extra="0 表示不自动清理"
-          >
-            <InputNumber min={0} max={500} style={{ width: '100%' }} />
-          </Form.Item>
-        </Space>
+                            <Form.Item
+                                name="retention"
+                                label="保留份数"
+                                style={{ width: 120, marginBottom: 12 }}
+                                tooltip="超过此数量的旧备份将被自动删除，0 为不限制"
+                            >
+                                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                            </Form.Item>
+                        </Space>
 
-        <Form.Item name="allowInsecure" valuePropName="checked">
-          <Tooltip title="仅在自签名证书等场景使用，不推荐">
-            <Switch /> <Text style={{ marginLeft: 8 }}>允许不安全 HTTPS 证书</Text>
-          </Tooltip>
-        </Form.Item>
-      </Form>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Form.Item name="allowInsecure" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                <Space>
+                                    <Switch size="small" />
+                                    <Text type="secondary" style={{ fontSize: '13px' }}>允许不安全证书</Text>
+                                </Space>
+                            </Form.Item>
 
-      <Space style={{ marginTop: 8 }} wrap>
-        <Button onClick={handleTest} loading={testing}>
-          测试连接
-        </Button>
-        <Button type="primary" icon={<CloudUploadOutlined />} onClick={handleBackupNow} loading={backingUp}>
-          立即备份
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={refreshList} loading={listLoading}>
-          刷新列表
-        </Button>
-        <Text type="secondary">恢复需要从列表中选择备份</Text>
-      </Space>
+                            <Space>
+                                <Button size="small" icon={<ApiOutlined />} onClick={handleTest} loading={testing}>
+                                    测试连接
+                                </Button>
+                                <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving}>
+                                    保存配置
+                                </Button>
+                            </Space>
+                        </div>
+                    </Form>
+                    </Card>
+                )
+            }
+        ]}
+      />
 
-      <div style={{ marginTop: 16 }}>
+      <Divider style={{ margin: '16px 0' }} />
+
+      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+         <Title level={5} style={{ margin: 0, fontSize: '15px' }}>备份列表</Title>
+         <Space>
+            <Button size="small" icon={<ReloadOutlined />} onClick={handleRefresh} loading={listLoading}>
+                刷新
+            </Button>
+            <Button size="small" type="primary" icon={<CloudUploadOutlined />} onClick={handleBackupNow} loading={backingUp}>
+                立即备份
+            </Button>
+         </Space>
+      </div>
+
+      <div style={{ height: '320px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '8px', background: 'rgba(0,0,0,0.01)' }}>
         <List
-          loading={listLoading}
-          dataSource={backups}
-          locale={{ emptyText: '暂无备份（先配置并点击“立即备份”）' }}
-          renderItem={(item) => (
-            <List.Item
-              actions={[
-                <Button
-                  key="restore"
-                  icon={<CloudDownloadOutlined />}
-                  onClick={() => handleRestore(item)}
+            loading={listLoading}
+            dataSource={backups}
+            locale={{
+                emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无备份" />
+            }}
+            renderItem={(item) => (
+                <List.Item
+                    actions={[
+                        <Button
+                            key="restore"
+                            type="link"
+                            size="small"
+                            icon={<CloudDownloadOutlined />}
+                            onClick={() => handleRestore(item)}
+                        >
+                            恢复
+                        </Button>
+                    ]}
+                    style={{ padding: '10px 16px' }}
                 >
-                  恢复
-                </Button>,
-              ]}
-            >
-              <List.Item.Meta
-                title={formatTime(item.createdAt)}
-                description={
-                  <Space size={8} wrap>
-                    <Text type="secondary">{item.filename}</Text>
-                    {item.size ? <Text type="secondary">· {formatSize(item.size)}</Text> : null}
-                  </Space>
-                }
-              />
-            </List.Item>
-          )}
+                    <List.Item.Meta
+                        avatar={<FileZipOutlined style={{ fontSize: '24px', color: '#1890ff', marginTop: 8 }} />}
+                        title={
+                             <Text style={{ fontSize: '14px' }}>{formatTime(item.createdAt)}</Text>
+                        }
+                        description={
+                            <Space size={8} style={{ fontSize: '12px' }} wrap>
+                                <Text type="secondary">{item.filename}</Text>
+                                {item.size ? <Tag bordered={false} style={{ margin: 0 }}>{formatSize(item.size)}</Tag> : null}
+                            </Space>
+                        }
+                    />
+                </List.Item>
+            )}
         />
       </div>
     </Modal>
