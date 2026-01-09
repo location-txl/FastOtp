@@ -33,23 +33,20 @@ const ZIP_AES_HMAC_LENGTH = 10;
 const ZIP_AES_PBKDF2_ITERATION_COUNT = 1000;
 const ZIP_AES_COUNTER = Buffer.from('01000000000000000000000000000000', 'hex');
 
-let zipAesCounterPatched = false;
-function ensureZipAesCounterPatched() {
-  if (zipAesCounterPatched) return;
+function createWinZipAesCounter() {
+  const counter = new aes.Counter(new Uint8Array(ZIP_AES_COUNTER));
   // WinZip AES-CTR uses a little-endian counter increment.
-  // archiver-zip-encrypted patches this too; we do it here to make restore independent.
-  if (aes?.Counter?.prototype) {
-    aes.Counter.prototype.increment = function () {
-      for (let i = 0; i < 16; i++) {
-        if (this._counter[i] === 255) this._counter[i] = 0;
-        else {
-          this._counter[i]++;
-          break;
-        }
+  // 仅覆写当前 counter 实例，避免修改第三方库原型带来的全局副作用。
+  counter.increment = function () {
+    for (let i = 0; i < 16; i++) {
+      if (this._counter[i] === 255) this._counter[i] = 0;
+      else {
+        this._counter[i]++;
+        break;
       }
-    };
-  }
-  zipAesCounterPatched = true;
+    }
+  };
+  return counter;
 }
 
 function parseLocalFileHeader(zipBuffer, offset) {
@@ -141,10 +138,9 @@ function decryptZipAesPayload(encryptedPayload, passwordBuffer, strength) {
     .subarray(0, ZIP_AES_HMAC_LENGTH);
   if (!calcHmac.equals(hmac)) throw new Error('BAD_PASSWORD');
 
-  ensureZipAesCounterPatched();
   const cipher = new aes.ModeOfOperation.ctr(
     new Uint8Array(aesKey),
-    new aes.Counter(new Uint8Array(ZIP_AES_COUNTER))
+    createWinZipAesCounter()
   );
   const decrypted = cipher.decrypt(new Uint8Array(encryptedData));
   return Buffer.from(decrypted);
