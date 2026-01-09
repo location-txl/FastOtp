@@ -7,7 +7,6 @@ const { PassThrough } = require('stream');
 const zlib = require('zlib');
 const aes = require('aes-js');
 
-const INDEX_FILENAME = 'FastOtp_backups_index.json';
 const DEFAULT_TIMEOUT_MS = 15000;
 
 const PROPFIND_BODY = Buffer.from(
@@ -15,6 +14,19 @@ const PROPFIND_BODY = Buffer.from(
     `<D:propfind xmlns:D="DAV:">\n` +
     `  <D:prop>\n` +
     `    <D:displayname />\n` +
+    `  </D:prop>\n` +
+    `</D:propfind>\n`,
+  'utf8'
+);
+
+const PROPFIND_LIST_BODY = Buffer.from(
+  `<?xml version="1.0" encoding="utf-8" ?>\n` +
+    `<D:propfind xmlns:D="DAV:">\n` +
+    `  <D:prop>\n` +
+    `    <D:displayname />\n` +
+    `    <D:getcontentlength />\n` +
+    `    <D:getlastmodified />\n` +
+    `    <D:resourcetype />\n` +
     `  </D:prop>\n` +
     `</D:propfind>\n`,
   'utf8'
@@ -327,6 +339,155 @@ async function ensureDir(config) {
   }
 }
 
+function decodeXmlText(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function tryParseHttpDateToMs(value) {
+  if (!value) return null;
+  const ms = Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(String(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function parseWebdavPropfindList(xmlText) {
+  const xml = String(xmlText || '');
+  if (!xml) return [];
+
+  const responseBlocks = [];
+  const responseRe = /<[^>]*:?response\b[^>]*>[\s\S]*?<\/[^>]*:?response>/gi;
+  let m;
+  while ((m = responseRe.exec(xml))) responseBlocks.push(m[0]);
+
+  const getTagText = (block, tagName) => {
+    const re = new RegExp(
+      `<[^>]*:?${tagName}\\b[^>]*>([\\s\\S]*?)<\\/[^>]*:?${tagName}>`,
+      'i'
+    );
+    const match = re.exec(block);
+    return match ? decodeXmlText(match[1]).trim() : '';
+  };
+
+  const isCollection = (block) => {
+    return /<[^>]*:?collection\b[^>]*\/?>/i.test(block);
+  };
+
+  const getHrefFilename = (href) => {
+    if (!href) return '';
+    try {
+      const u = new URL(href, 'http://local.invalid');
+      const parts = u.pathname.split('/').filter(Boolean);
+      return parts.length ? safeDecodeURIComponent(parts[parts.length - 1]) : '';
+    } catch {
+      const parts = String(href).split('/').filter(Boolean);
+      return parts.length ? safeDecodeURIComponent(parts[parts.length - 1]) : '';
+    }
+  };
+
+  return responseBlocks
+    .map((block) => {
+      const href = getTagText(block, 'href');
+      const displayname = getTagText(block, 'displayname');
+      const getlastmodified = getTagText(block, 'getlastmodified');
+      const getcontentlength = getTagText(block, 'getcontentlength');
+
+      const hrefFilename = getHrefFilename(href);
+      const filename = hrefFilename || displayname || '';
+      const label = displayname || hrefFilename || '';
+
+      const modifiedAt = tryParseHttpDateToMs(getlastmodified);
+      const size = Number.isFinite(Number(getcontentlength)) ? Number(getcontentlength) : null;
+      return {
+        filename: filename || '',
+        label,
+        modifiedAt,
+        size,
+        isCollection: isCollection(block),
+        href: href || '',
+      };
+    })
+    .filter((item) => item && typeof item.filename === 'string');
+}
+
+async function listDir(config) {
+  const authHeaders = buildAuthHeaders(config.username, config.password);
+  const dirUrl = normalizeDirUrl(config.dirUrl);
+
+  const res = await request(dirUrl, {
+    method: 'PROPFIND',
+    headers: {
+      ...authHeaders,
+      Depth: '1',
+      'Content-Type': 'text/xml; charset=utf-8',
+    },
+    body: PROPFIND_LIST_BODY,
+    allowInsecure: config.allowInsecure,
+  });
+
+  if (![200, 207].includes(res.status)) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('WebDAV 鉴权失败（无法列出备份目录）');
+    }
+    throw new Error(`列出备份目录失败（HTTP ${res.status}）`);
+  }
+
+  const xml = res.body.toString('utf8');
+  const items = parseWebdavPropfindList(xml);
+  const basePath = new URL(dirUrl).pathname;
+
+  return items
+    .filter((item) => item.filename)
+    .filter((item) => !item.isCollection)
+    .filter((item) => {
+      if (!item.href) return true;
+      try {
+        const u = new URL(item.href, dirUrl);
+        const hrefPath = u.pathname;
+        if (hrefPath === basePath) return false;
+        if (hrefPath === basePath.slice(0, -1)) return false;
+      } catch {
+        // ignore
+      }
+      return true;
+    });
+}
+
+function isFastOtpBackupZip(filename) {
+  if (!filename || typeof filename !== 'string') return false;
+  return filename.startsWith('FastOtp_backup_') && filename.endsWith('.zip');
+}
+
+function parseBackupFilenameToMs(filename) {
+  // FastOtp_backup_YYYYMMDD_HHMMSS_SSS.zip（本地时间）
+  const m = /^FastOtp_backup_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})_(\d{3})\.zip$/.exec(
+    String(filename || '')
+  );
+  if (!m) return null;
+  const yyyy = Number(m[1]);
+  const MM = Number(m[2]);
+  const dd = Number(m[3]);
+  const HH = Number(m[4]);
+  const mm = Number(m[5]);
+  const ss = Number(m[6]);
+  const SSS = Number(m[7]);
+  const d = new Date(yyyy, MM - 1, dd, HH, mm, ss, SSS);
+  const ms = d.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
 function createBackupFilename(createdAtMs) {
   // 文件名更适合展示“本地时间”，避免时区误解（文件名不额外附加时区信息）。
   return `FastOtp_backup_${formatLocalTimestampForFilename(createdAtMs)}.zip`;
@@ -471,82 +632,6 @@ function validateBackupObject(data) {
   return data;
 }
 
-async function getIndex(config) {
-  const authHeaders = buildAuthHeaders(config.username, config.password);
-  const indexUrl = joinDirFileUrl(config.dirUrl, INDEX_FILENAME);
-
-  const res = await request(indexUrl, {
-    method: 'GET',
-    headers: { ...authHeaders },
-    allowInsecure: config.allowInsecure,
-  });
-
-  if (res.status === 404) {
-    return {
-      version: 2,
-      updatedAt: Date.now(),
-      backups: [],
-    };
-  }
-
-  if (!isSuccessStatus(res.status)) {
-    if (res.status === 401 || res.status === 403) {
-      throw new Error('WebDAV 鉴权失败（无法读取备份索引）');
-    }
-    throw new Error(`读取备份索引失败（HTTP ${res.status}）`);
-  }
-
-  try {
-    const json = res.body.toString('utf8');
-    const parsed = JSON.parse(json);
-    if (parsed && Array.isArray(parsed.backups)) {
-      if (parsed.version === 2 && Number.isFinite(parsed.updatedAt)) {
-        parsed.backups = parsed.backups.filter(
-          item =>
-            item &&
-            typeof item === 'object' &&
-            typeof item.filename === 'string' &&
-            item.filename &&
-            Number.isFinite(item.createdAt)
-        );
-        return parsed;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  return {
-    version: 2,
-    updatedAt: Date.now(),
-    backups: [],
-  };
-}
-
-async function putIndex(config, index) {
-  const authHeaders = buildAuthHeaders(config.username, config.password);
-  const indexUrl = joinDirFileUrl(config.dirUrl, INDEX_FILENAME);
-  const body = Buffer.from(JSON.stringify(index, null, 2), 'utf8');
-
-  const res = await request(indexUrl, {
-    method: 'PUT',
-    headers: {
-      ...authHeaders,
-      'Content-Type': 'application/json; charset=utf-8',
-      'Content-Length': body.length,
-    },
-    body,
-    allowInsecure: config.allowInsecure,
-  });
-
-  if (!isSuccessStatus(res.status)) {
-    if (res.status === 401 || res.status === 403) {
-      throw new Error('WebDAV 鉴权失败（无法写入备份索引）');
-    }
-    throw new Error(`写入备份索引失败（HTTP ${res.status}）`);
-  }
-}
-
 async function putFile(config, filename, buffer) {
   const authHeaders = buildAuthHeaders(config.username, config.password);
   const fileUrl = joinDirFileUrl(config.dirUrl, filename);
@@ -623,9 +708,18 @@ async function testConnection(config) {
 async function listBackups(config) {
   const cfg = normalizeConfig(config);
   await ensureDir(cfg);
-  const index = await getIndex(cfg);
+  const items = await listDir(cfg);
+  const backups = items
+    .filter((item) => isFastOtpBackupZip(item.filename))
+    .map((item) => ({
+      filename: item.filename,
+      createdAt: Number(item.modifiedAt) || Number(parseBackupFilenameToMs(item.filename)) || 0,
+      size: Number.isFinite(item.size) ? item.size : undefined,
+      schemaVersion: 2,
+      format: 'aes256',
+    }))
+    .filter((item) => item.createdAt > 0);
 
-  const backups = Array.isArray(index.backups) ? index.backups : [];
   backups.sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
   return backups;
 }
@@ -664,29 +758,12 @@ async function createBackup(config, data) {
   const filename = createBackupFilename(createdAt);
   await putFile(cfg, filename, zipBuffer);
 
-  const index = await getIndex(cfg);
-  const next = {
-    version: 2,
-    updatedAt: Date.now(),
-    backups: Array.isArray(index.backups) ? index.backups.slice() : [],
-  };
-
-  next.backups.unshift({
-    filename,
-    createdAt,
-    size: zipBuffer.length,
-    schemaVersion: 2,
-    format: 'aes256',
-  });
-
-  next.backups.sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
-
-  if (cfg.retention > 0 && next.backups.length > cfg.retention) {
-    const removed = next.backups.splice(cfg.retention);
-    await putIndex(cfg, next);
-    await Promise.allSettled(removed.map((item) => deleteFile(cfg, item.filename)));
-  } else {
-    await putIndex(cfg, next);
+  if (cfg.retention > 0) {
+    const backups = await listBackups(cfg);
+    if (backups.length > cfg.retention) {
+      const removed = backups.slice(cfg.retention);
+      await Promise.allSettled(removed.map((item) => deleteFile(cfg, item.filename)));
+    }
   }
 
   return {
