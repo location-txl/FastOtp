@@ -60,7 +60,7 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
       username: '',
       password: '',
       encryptPassword: '',
-      retention: 0,
+      retentionDays: 0,
       autoBackup: true,
       allowInsecure: false,
     }),
@@ -104,12 +104,14 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
   const normalizeConfig = useCallback(
     (cfg?: Partial<WebdavBackupConfig>): WebdavBackupConfig => {
       const merged = { ...initialValues, ...(cfg || {}) };
+      const retentionDaysRaw = Number((merged as WebdavBackupConfig).retentionDays);
+      const retentionDays = Number.isFinite(retentionDaysRaw) ? Math.max(0, Math.floor(retentionDaysRaw)) : 0;
       return {
         dirUrl: typeof merged.dirUrl === 'string' ? merged.dirUrl : '',
         username: typeof merged.username === 'string' ? merged.username : '',
         password: typeof merged.password === 'string' ? merged.password : '',
         encryptPassword: typeof merged.encryptPassword === 'string' ? merged.encryptPassword : '',
-        retention: Number.isFinite(Number(merged.retention)) ? Number(merged.retention) : 0,
+        retentionDays,
         autoBackup: merged.autoBackup !== false,
         allowInsecure: !!merged.allowInsecure,
       };
@@ -143,7 +145,7 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
       saved.username !== current.username ||
       saved.password !== current.password ||
       saved.encryptPassword !== current.encryptPassword ||
-      saved.retention !== current.retention ||
+      saved.retentionDays !== current.retentionDays ||
       saved.autoBackup !== current.autoBackup ||
       saved.allowInsecure !== current.allowInsecure
     );
@@ -389,12 +391,12 @@ const WebDavBackupModal: React.FC<WebDavBackupModalProps> = ({ open, onClose, on
                             </Form.Item>
 
                             <Form.Item
-                                name="retention"
-                                label="保留份数"
-                                style={{ width: 120, marginBottom: 12 }}
-                                tooltip="超过此数量的旧备份将被自动删除，0 为不限制"
+                                name="retentionDays"
+                                label="保留天数"
+                                style={{ width: 140, marginBottom: 12 }}
+                                tooltip="超过此天数的旧备份将被自动删除，0 为不限制"
                             >
-                                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+                                <InputNumber min={0} precision={0} step={1} style={{ width: '100%' }} />
                             </Form.Item>
                         </Space>
 

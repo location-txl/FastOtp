@@ -511,12 +511,14 @@ function formatLocalTimestampForFilename(timestampMs) {
 
 function normalizeConfig(config) {
   if (!config || typeof config !== 'object') throw new Error('配置无效');
+  const retentionDaysRaw = Number(config.retentionDays);
+  const retentionDays = Number.isFinite(retentionDaysRaw) ? Math.max(0, Math.floor(retentionDaysRaw)) : 0;
   return {
     dirUrl: normalizeDirUrl(config.dirUrl),
     username: config.username || '',
     password: config.password || '',
     encryptPassword: config.encryptPassword || '',
-    retention: Number.isFinite(config.retention) ? Number(config.retention) : 0,
+    retentionDays,
     allowInsecure: !!config.allowInsecure,
   };
 }
@@ -758,10 +760,11 @@ async function createBackup(config, data) {
   const filename = createBackupFilename(createdAt);
   await putFile(cfg, filename, zipBuffer);
 
-  if (cfg.retention > 0) {
+  if (cfg.retentionDays > 0) {
+    const cutoff = Date.now() - cfg.retentionDays * 24 * 60 * 60 * 1000;
     const backups = await listBackups(cfg);
-    if (backups.length > cfg.retention) {
-      const removed = backups.slice(cfg.retention);
+    const removed = backups.filter((item) => Number(item.createdAt) < cutoff);
+    if (removed.length > 0) {
       await Promise.allSettled(removed.map((item) => deleteFile(cfg, item.filename)));
     }
   }

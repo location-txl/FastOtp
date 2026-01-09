@@ -534,7 +534,7 @@ function getWebdavConfig() {
         username: typeof cfg.username === 'string' ? cfg.username : '',
         password: typeof cfg.password === 'string' ? cfg.password : '',
         encryptPassword: typeof cfg.encryptPassword === 'string' ? cfg.encryptPassword : '',
-        retention: Number.isFinite(cfg.retention) ? Number(cfg.retention) : 0,
+        retentionDays: Number.isFinite(cfg.retentionDays) ? Number(cfg.retentionDays) : 0,
         autoBackup: typeof cfg.autoBackup === 'boolean' ? cfg.autoBackup : true,
         allowInsecure: typeof cfg.allowInsecure === 'boolean' ? cfg.allowInsecure : false,
     };
@@ -550,9 +550,9 @@ function setWebdavConfig(config) {
         username: typeof config.username === 'string' ? config.username : prev.username,
         password: typeof config.password === 'string' ? config.password : prev.password,
         encryptPassword: typeof config.encryptPassword === 'string' ? config.encryptPassword : prev.encryptPassword,
-        retention: Number.isFinite(config.retention)
-            ? Number(config.retention)
-            : (Number.isFinite(prev.retention) ? Number(prev.retention) : 0),
+        retentionDays: Number.isFinite(config.retentionDays)
+            ? Number(config.retentionDays)
+            : (Number.isFinite(prev.retentionDays) ? Number(prev.retentionDays) : 0),
         autoBackup:
             typeof config.autoBackup === 'boolean'
                 ? config.autoBackup

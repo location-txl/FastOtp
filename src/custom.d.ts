@@ -22,7 +22,7 @@ export interface WebdavBackupConfig {
     username?: string;
     password?: string;
     encryptPassword?: string;
-    retention?: number; // 0 表示不自动清理
+    retentionDays?: number; // 0 表示不自动清理
     autoBackup?: boolean; // 默认开启：OTP 变更后自动备份
     allowInsecure?: boolean; // 允许忽略 HTTPS 证书校验（不推荐）
 }
