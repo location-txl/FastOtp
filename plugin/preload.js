@@ -4,6 +4,7 @@ const otpCode = require('./otp_code');
 const webdavBackup = require('./webdav_backup');
 const { createAutoBackupManager } = require('./auto_backup');
 const fs = require('fs');
+const { escapeRemark, unescapeRemark } = require('./remark_codec');
 
 const DB_KEY_OTP_ITEMS = 'otp_items';
 const DB_KEY_DELETED_ITEMS = 'deleted_otp_items';
@@ -261,7 +262,7 @@ function parseOtpUri(uri) {
         const period = parseInt(params.get('period') || '30', 10);
         const algorithm = (params.get('algorithm') || 'SHA1').toUpperCase();
         const counter = type === 'hotp' ? parseInt(params.get('counter') || '0', 10) : 0;
-        const remark = params.get('remark') || '';
+        const remark = unescapeRemark(params.get('remark') || '');
         
         // 忽略非标准参数，如 codeDisplay
         
@@ -433,9 +434,9 @@ function generateOtpUri(item) {
         if (type === 'hotp' && item.counter !== undefined) {
             params.set('counter', item.counter.toString());
         }
-        
+
         if (item.remark) {
-            params.set('remark', item.remark);
+            params.set('remark', escapeRemark(item.remark));
         }
         
         // 构建完整URI
@@ -461,8 +462,8 @@ function exportOtpToFile() {
         // 生成导出内容，每行一个OTP URI，并对中文字符进行解码
         const exportContent = otpItems.map(item => {
             const uri = generateOtpUri(item);
-            // 解码URI中的中文字符，使其在文本文件中可读
-            return decodeURIComponent(uri);
+            // 解码URI中的中文字符（保留保留字符编码，避免破坏 query 结构）
+            return decodeURI(uri);
         }).join('\n');
         
         // 添加文件头说明
@@ -584,6 +585,7 @@ async function listWebdavBackups(configOverride) {
     const config = resolveWebdavConfig(configOverride);
     return await webdavBackup.listBackups(config);
 }
+
 
 async function createWebdavBackup(configOverride) {
     try {
