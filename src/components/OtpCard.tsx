@@ -183,12 +183,14 @@ const OtpCard: React.FC<OtpCardProps> = ({
         border: isSelected ? `1px solid ${token.colorPrimary}` : undefined,
         cursor: 'pointer', // 添加指针样式表明可点击
       }}
-      bodyStyle={{ 
-        transition: 'all 0.3s',
-        padding: '8px 16px'
-      }}
       size="small"
-      headStyle={{ padding: '0 16px' }}
+      styles={{
+        body: {
+          transition: 'all 0.3s',
+          padding: '8px 16px',
+        },
+        header: { padding: '0 16px' },
+      }}
       onClick={copyCurrentOtp} // 添加点击事件
     >
       <div style={{ 

@@ -99,10 +99,12 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ open, onClose }) => {
       footer={null}
       width={600}
       style={{ top: 20 }}
-      bodyStyle={{ 
-        maxHeight: '70vh', 
-        overflowY: 'auto',
-        padding: '20px 24px'
+      styles={{
+        body: {
+          maxHeight: '70vh',
+          overflowY: 'auto',
+          padding: '20px 24px',
+        },
       }}
     >
       <Timeline 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled } from '@ant-design/icons';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled, CloudSyncOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import ChangelogModal from './ChangelogModal';
@@ -11,6 +11,7 @@ import { useSubInput } from '../hooks/useSubInput';
 import PageLayout from './PageLayout';
 import OtpGroup from './OtpGroup';
 import { PluginEnterContext } from '../hooks/PageEnterContext';
+import WebDavBackupModal from './WebDavBackupModal';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -30,6 +31,8 @@ const OtpManager: React.FC = () => {
   const [changelogVisible, setChangelogVisible] = useState(false);
   const [deletedModalVisible, setDeletedModalVisible] = useState(false);
   const [deletedItems, setDeletedItems] = useState<OtpItem[]>([]);
+  const [webdavBackupVisible, setWebdavBackupVisible] = useState(false);
+  const [autoBackupStatus, setAutoBackupStatus] = useState({ running: false, scheduled: false });
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
   
@@ -59,7 +62,14 @@ const OtpManager: React.FC = () => {
   );
 
   const pageEnter = useContext(PluginEnterContext);
-  
+  useEffect(() => {
+    const getStatus = window.api?.backup?.getAutoBackupStatus;
+    const onStatusChange = window.api?.backup?.onAutoBackupStatusChange;
+    if (!getStatus || !onStatusChange) return;
+
+    setAutoBackupStatus(getStatus());
+    return onStatusChange((status) => setAutoBackupStatus(status));
+  }, []);
   // 使用useMemo缓存不同issuer分组的数据
 
   
@@ -114,10 +124,10 @@ const OtpManager: React.FC = () => {
 
   useEffect(() => {
     // 组件挂载后自动聚焦到容器，但只在没有模态框打开时
-    if (containerRef.current && !formVisible && !importModalVisible && !changelogVisible && !deletedModalVisible) {
+    if (containerRef.current && !formVisible && !importModalVisible && !changelogVisible && !deletedModalVisible && !webdavBackupVisible) {
         containerRef.current.focus();
     }
-  }, [formVisible, importModalVisible, changelogVisible, deletedModalVisible]);
+  }, [formVisible, importModalVisible, changelogVisible, deletedModalVisible, webdavBackupVisible]);
 
   useEffect(() => {
     // 重置引用数组大小以匹配当前项目数量
@@ -217,7 +227,7 @@ const OtpManager: React.FC = () => {
   // 使用React的onKeyDown事件处理键盘输入
   const handleKeyDown = (event: React.KeyboardEvent) => {
     // 如果表单或导入模态框或更新日志或已删除项目模态框打开，不处理键盘事件
-    if (formVisible || importModalVisible || changelogVisible || deletedModalVisible) return;
+    if (formVisible || importModalVisible || changelogVisible || deletedModalVisible || webdavBackupVisible) return;
     
     // 检查事件目标是否为输入框，如果是，则不处理键盘事件
     const target = event.target as HTMLElement;
@@ -572,6 +582,14 @@ const OtpManager: React.FC = () => {
                   disabled={otpItems.length === 0}
                 />
               </Tooltip>
+              <Tooltip title={autoBackupStatus.running || autoBackupStatus.scheduled ? '自动备份中…' : 'WebDAV 备份'}>
+                <Button
+                  type="text"
+                  icon={<CloudSyncOutlined spin={autoBackupStatus.running || autoBackupStatus.scheduled} />}
+                  onClick={() => setWebdavBackupVisible(true)}
+                  size="small"
+                />
+              </Tooltip>
               <Tooltip title="查看更新日志">
                 <Button 
                   type="text" 
@@ -658,6 +676,22 @@ const OtpManager: React.FC = () => {
       <ChangelogModal 
         open={changelogVisible}
         onClose={() => setChangelogVisible(false)}
+      />
+
+      <WebDavBackupModal
+        open={webdavBackupVisible}
+        onClose={() => {
+          setWebdavBackupVisible(false);
+          setTimeout(() => {
+            if (containerRef.current) {
+              containerRef.current.focus();
+            }
+          }, 100);
+        }}
+        onRestored={() => {
+          loadOtpItems();
+          loadDeletedItems();
+        }}
       />
 
       <Modal
