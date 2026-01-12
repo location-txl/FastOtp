@@ -8,51 +8,6 @@ interface OtpGroupProps {
   onSelectIssuer: (otpItems: OtpItem[]) => void;
 }
 
-const getIssuerIcon = (issuer: string) => {
-  // 这里可以扩展为实际的图标匹配逻辑
-  // 例如: 常见服务提供商的图标映射
-  const iconMap: Record<string, React.ReactNode> = {
-    'Google': <Avatar src="https://www.google.com/favicon.ico" size="small" />,
-    'Microsoft': <Avatar src="https://www.microsoft.com/favicon.ico" size="small" />,
-    'Github': <Avatar src="https://github.com/favicon.ico" size="small" />,
-    'Apple': <Avatar src="https://www.apple.com/favicon.ico" size="small" />,
-    'Amazon': <Avatar src="https://www.amazon.com/favicon.ico" size="small" />,
-    'Facebook': <Avatar src="https://www.facebook.com/favicon.ico" size="small" />,
-    'Twitter': <Avatar src="https://twitter.com/favicon.ico" size="small" />,
-    // 添加更多常见服务提供商的图标
-    'Dropbox': <Avatar src="https://www.dropbox.com/favicon.ico" size="small" />,
-    'LinkedIn': <Avatar src="https://www.linkedin.com/favicon.ico" size="small" />,
-    'Netflix': <Avatar src="https://www.netflix.com/favicon.ico" size="small" />,
-    'PayPal': <Avatar src="https://www.paypal.com/favicon.ico" size="small" />,
-    'Slack': <Avatar src="https://slack.com/favicon.ico" size="small" />,
-    'Instagram': <Avatar src="https://www.instagram.com/favicon.ico" size="small" />,
-    'Twitch': <Avatar src="https://www.twitch.tv/favicon.ico" size="small" />,
-    'Discord': <Avatar src="https://discord.com/favicon.ico" size="small" />,
-    'Gitlab': <Avatar src="https://gitlab.com/favicon.ico" size="small" />,
-    'Yahoo': <Avatar src="https://www.yahoo.com/favicon.ico" size="small" />,
-    'Steam': <Avatar src="https://store.steampowered.com/favicon.ico" size="small" />,
-    'Wordpress': <Avatar src="https://wordpress.org/favicon.ico" size="small" />,
-    'Bitbucket': <Avatar src="https://bitbucket.org/favicon.ico" size="small" />,
-    'Coinbase': <Avatar src="https://www.coinbase.com/favicon.ico" size="small" />,
-    'Tencent': <Avatar src="https://www.tencent.com/favicon.ico" size="small" />,
-    'Alibaba': <Avatar src="https://www.alibaba.com/favicon.ico" size="small" />,
-    'Baidu': <Avatar src="https://www.baidu.com/favicon.ico" size="small" />,
-    'Weibo': <Avatar src="https://weibo.com/favicon.ico" size="small" />,
-    'Netease': <Avatar src="https://www.163.com/favicon.ico" size="small" />,
-  };
-  // 如果找到匹配的图标，返回图标
-  // 否则返回基于issuer名称的Avatar
-  if (iconMap[issuer]) {
-    return iconMap[issuer];
-  } else {
-    return (
-      <Avatar size="small" style={{ backgroundColor: stringToColor(issuer) }}>
-        {issuer.charAt(0).toUpperCase()}
-      </Avatar>
-    );
-  }
-}
-
 // 将字符串转换为颜色值
 const stringToColor = (str: string) => {
   let hash = 0;
@@ -67,50 +22,277 @@ const stringToColor = (str: string) => {
   return color;
 };
 
-// 规范化 issuer 名称
+const normalizeIssuerKey = (issuerRaw: string): string => {
+  return issuerRaw
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "");
+};
+
+// issuer 别名 -> 规范展示名（尽量聚合到同一分组）
+const issuerAliasMap: Record<string, string> = {
+  // OpenAI
+  openai: "OpenAI",
+  chatgpt: "OpenAI",
+  openaicom: "OpenAI",
+  apiopenaicom: "OpenAI",
+
+  // 飞书 / Lark
+  飞书: "Feishu",
+  feishu: "Feishu",
+  feishucn: "Feishu",
+  lark: "Feishu",
+  larksuite: "Feishu",
+  larksuitecom: "Feishu",
+
+  // V2EX
+  v2ex: "V2EX",
+  v2excom: "V2EX",
+  v2exorg: "V2EX",
+
+  // Cloudflare
+  cloudflare: "Cloudflare",
+  cloudflarecom: "Cloudflare",
+
+  // 常见服务
+  google: "Google",
+  microsoft: "Microsoft",
+  office365: "Microsoft",
+  github: "GitHub",
+  githubcom: "GitHub",
+  gitlab: "GitLab",
+  gitlabcom: "GitLab",
+  gitee: "Gitee",
+  giteecom: "Gitee",
+  apple: "Apple",
+  amazon: "Amazon",
+  aws: "AWS",
+  amazonwebservices: "AWS",
+  facebook: "Facebook",
+  twitter: "X",
+  xcom: "X",
+  dropbox: "Dropbox",
+  linkedin: "LinkedIn",
+  netflix: "Netflix",
+  paypal: "PayPal",
+  slack: "Slack",
+  instagram: "Instagram",
+  twitch: "Twitch",
+  discord: "Discord",
+  yahoo: "Yahoo",
+  steam: "Steam",
+  wordpress: "WordPress",
+  bitbucket: "Bitbucket",
+  coinbase: "Coinbase",
+  vercel: "Vercel",
+  vercelcom: "Vercel",
+  netlify: "Netlify",
+  netlifycom: "Netlify",
+  digitalocean: "DigitalOcean",
+  digitaloceancom: "DigitalOcean",
+  cloudflarezero: "Cloudflare",
+  notion: "Notion",
+  notionso: "Notion",
+  figma: "Figma",
+  figmacom: "Figma",
+  atlassian: "Atlassian",
+  atlassiancom: "Atlassian",
+  jira: "Atlassian",
+  confluence: "Atlassian",
+  zoom: "Zoom",
+  zoomus: "Zoom",
+  okta: "Okta",
+  oktacom: "Okta",
+  auth0: "Auth0",
+  auth0com: "Auth0",
+  onepassword: "1Password",
+  "1password": "1Password",
+  "1passwordcom": "1Password",
+  bitwarden: "Bitwarden",
+  bitwardencom: "Bitwarden",
+  stripe: "Stripe",
+  stripecom: "Stripe",
+  sentry: "Sentry",
+  sentryio: "Sentry",
+  linear: "Linear",
+  linearapp: "Linear",
+  telegram: "Telegram",
+  telegramorg: "Telegram",
+  tencent: "Tencent",
+  腾讯: "Tencent",
+  wechat: "WeChat",
+  weixin: "WeChat",
+  微信: "WeChat",
+  alipay: "Alipay",
+  支付宝: "Alipay",
+  dingtalk: "DingTalk",
+  钉钉: "DingTalk",
+  alibaba: "Alibaba",
+  阿里巴巴: "Alibaba",
+  baidu: "Baidu",
+  百度: "Baidu",
+  weibo: "Weibo",
+  微博: "Weibo",
+  netease: "Netease",
+  网易: "Netease",
+  "163": "Netease",
+};
+
+// 规范展示名 -> 域名候选（用于在线 favicon）
+const issuerDomainCandidatesMap: Record<string, string[]> = {
+  OpenAI: ["openai.com"],
+  Feishu: ["feishu.cn", "larksuite.com"],
+  V2EX: ["v2ex.com"],
+  Cloudflare: ["cloudflare.com"],
+  Google: ["google.com"],
+  Microsoft: ["microsoft.com", "live.com"],
+  GitHub: ["github.com"],
+  GitLab: ["gitlab.com"],
+  Gitee: ["gitee.com"],
+  Apple: ["apple.com"],
+  Amazon: ["amazon.com"],
+  AWS: ["aws.amazon.com", "amazon.com"],
+  Facebook: ["facebook.com"],
+  X: ["x.com", "twitter.com"],
+  Dropbox: ["dropbox.com"],
+  LinkedIn: ["linkedin.com"],
+  Netflix: ["netflix.com"],
+  PayPal: ["paypal.com"],
+  Slack: ["slack.com"],
+  Instagram: ["instagram.com"],
+  Twitch: ["twitch.tv"],
+  Discord: ["discord.com"],
+  Yahoo: ["yahoo.com"],
+  Steam: ["store.steampowered.com", "steampowered.com"],
+  WordPress: ["wordpress.org", "wordpress.com"],
+  Bitbucket: ["bitbucket.org"],
+  Coinbase: ["coinbase.com"],
+  Vercel: ["vercel.com"],
+  Netlify: ["netlify.com"],
+  DigitalOcean: ["digitalocean.com"],
+  Notion: ["notion.so"],
+  Figma: ["figma.com"],
+  Atlassian: ["atlassian.com"],
+  Zoom: ["zoom.us"],
+  Okta: ["okta.com"],
+  Auth0: ["auth0.com"],
+  "1Password": ["1password.com"],
+  Bitwarden: ["bitwarden.com"],
+  Stripe: ["stripe.com"],
+  Sentry: ["sentry.io"],
+  Linear: ["linear.app"],
+  Telegram: ["telegram.org"],
+  Tencent: ["tencent.com"],
+  WeChat: ["weixin.qq.com", "wechat.com"],
+  Alipay: ["alipay.com"],
+  DingTalk: ["dingtalk.com"],
+  Alibaba: ["alibaba.com"],
+  Baidu: ["baidu.com"],
+  Weibo: ["weibo.com"],
+  Netease: ["163.com"],
+};
+
+const faviconUrlFromDomain = (domain: string) => {
+  // Google 的 s2 favicon 覆盖面较广，且支持 size 参数
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+};
+
+const extractDomainFromIssuer = (issuerRaw: string): string | undefined => {
+  const text = issuerRaw.trim();
+  if (!text) return undefined;
+
+  // URL
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      const url = new URL(text);
+      return url.hostname || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // email
+  const atIndex = text.lastIndexOf("@");
+  if (atIndex > 0 && atIndex < text.length - 1) {
+    const domain = text.slice(atIndex + 1).trim();
+    if (domain.includes(".") && !domain.includes(" ")) return domain.toLowerCase();
+  }
+
+  // 直接像域名（可能包含 path）
+  if (text.includes(".") && !text.includes(" ")) {
+    const noProto = text.replace(/^www\./i, "");
+    const hostname = noProto.split("/")[0].split("?")[0].split("#")[0];
+    if (hostname.includes(".")) return hostname.toLowerCase();
+  }
+
+  return undefined;
+};
+
+// 规范化 issuer 名称（用于分组展示）
 const normalizeIssuer = (issuer: string): string => {
   if (!issuer) return '';
-  const lowerIssuer = issuer.toLowerCase();
-  const commonIssuers: Record<string, string> = {
-    'google': 'Google',
-    'microsoft': 'Microsoft',
-    'github': 'Github', // 将不同的 GitHub写法统一
-    'apple': 'Apple',
-    'amazon': 'Amazon',
-    'facebook': 'Facebook',
-    'twitter': 'Twitter',
-    // 添加更多常见服务提供商的名称规范化
-    'dropbox': 'Dropbox',
-    'linkedin': 'LinkedIn',
-    'netflix': 'Netflix',
-    'paypal': 'PayPal',
-    'slack': 'Slack',
-    'instagram': 'Instagram',
-    'twitch': 'Twitch',
-    'discord': 'Discord',
-    'gitlab': 'Gitlab',
-    'yahoo': 'Yahoo',
-    'steam': 'Steam',
-    'wordpress': 'Wordpress',
-    'bitbucket': 'Bitbucket',
-    'coinbase': 'Coinbase',
-    '腾讯': 'Tencent',
-    'tencent': 'Tencent',
-    '阿里巴巴': 'Alibaba',
-    'alibaba': 'Alibaba',
-    '百度': 'Baidu',
-    'baidu': 'Baidu',
-    '微博': 'Weibo',
-    'weibo': 'Weibo',
-    '网易': 'Netease',
-    'netease': 'Netease',
-    '163': 'Netease',
-  };
-  if (commonIssuers[lowerIssuer]) {
-    return commonIssuers[lowerIssuer];
-  }
+  const key = normalizeIssuerKey(issuer);
+  if (issuerAliasMap[key]) return issuerAliasMap[key];
+
+  // 对于像域名的 issuer，尽量保留原信息（避免“example.com”被吞掉）
+  const domain = extractDomainFromIssuer(issuer);
+  if (domain) return domain;
+
   // 对于不在映射中的，首字母大写
+  const lowerIssuer = issuer.trim().toLowerCase();
   return lowerIssuer.charAt(0).toUpperCase() + lowerIssuer.slice(1);
+};
+
+const IssuerAvatar: React.FC<{ issuer: string }> = ({ issuer }) => {
+  const [domainIndex, setDomainIndex] = useState(0);
+  const [useColorBg, setUseColorBg] = useState(false);
+  const issuerKey = useMemo(() => normalizeIssuerKey(issuer), [issuer]);
+  const normalizedIssuer = useMemo(() => issuerAliasMap[issuerKey] || issuer, [issuer, issuerKey]);
+
+  const domainCandidates = useMemo(() => {
+    const fromRaw = extractDomainFromIssuer(issuer);
+    if (fromRaw) return [fromRaw];
+    const fromMap = issuerDomainCandidatesMap[normalizedIssuer];
+    if (fromMap && fromMap.length > 0) return fromMap;
+    return [];
+  }, [issuer, normalizedIssuer]);
+
+  // issuer 切换时，重置头像加载状态，避免沿用上一个 issuer 的失败索引/占位状态
+  useEffect(() => {
+    setDomainIndex(0);
+    // 没有在线头像来源时，直接使用彩色背景回退
+    setUseColorBg(domainCandidates.length === 0);
+  }, [issuer, domainCandidates.length]);
+
+  const domain = domainCandidates[domainIndex];
+  const faviconUrl = domain ? faviconUrlFromDomain(domain) : undefined;
+  const displayText = normalizedIssuer || issuer;
+  const fallbackText = (displayText.trim().charAt(0) || "?").toUpperCase();
+
+  return (
+    <Avatar
+      size="small"
+      src={faviconUrl}
+      style={useColorBg ? { backgroundColor: stringToColor(displayText) } : undefined}
+      onError={() => {
+        // 有候选域名就换下一个；没有就让 Avatar 自动用 children 回退
+        if (domainCandidates.length > 0 && domainIndex < domainCandidates.length - 1) {
+          setDomainIndex(domainIndex + 1);
+          return false;
+        }
+        setUseColorBg(true);
+        return true;
+      }}
+    >
+      {fallbackText}
+    </Avatar>
+  );
+};
+
+const getIssuerIcon = (issuer: string) => {
+  return <IssuerAvatar issuer={issuer} />;
 };
 
 const labelAll = "all"
