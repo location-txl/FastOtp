@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: "1.5.0",
+    date: "2026-1-12",
+    features: [
+      "支持 webdav 备份功能",
+    ]
+  },
+  {
     version: "1.3.0",
     date: "2025-8-10",
     features: [
