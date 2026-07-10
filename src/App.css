@@ -29,9 +29,15 @@
   min-width: 0;
 }
 
-.otp-card--grid .otp-card-title .ant-typography {
+.otp-card--grid .otp-card-title .ant-space-item {
   min-width: 0;
-  max-width: 160px;
+  flex-shrink: 1;
+}
+
+.otp-card--grid .otp-card-title .ant-typography {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .otp-card--grid .ant-card-head-title {
