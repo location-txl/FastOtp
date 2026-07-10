@@ -6,7 +6,7 @@ import OtpForm from './OtpForm';
 import ChangelogModal from './ChangelogModal';
 import { messageRef } from '../App';
 import { DEFAULT_OTP_PERIOD } from '../constants';
-import { OtpItem } from '../custom';
+import { OtpDraft, OtpItem } from '../custom';
 import { useSubInput } from '../hooks/useSubInput';
 import PageLayout from './PageLayout';
 import OtpGroup from './OtpGroup';
@@ -27,6 +27,7 @@ const OtpManager: React.FC = () => {
   const [otpItems, setOtpItems] = useState<OtpItem[]>([]);
   const [formVisible, setFormVisible] = useState(false);
   const [editItem, setEditItem] = useState<OtpItem | null>(null);
+  const [initialItem, setInitialItem] = useState<OtpDraft | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importUri, setImportUri] = useState('');
   const [changelogVisible, setChangelogVisible] = useState(false);
@@ -298,17 +299,19 @@ const OtpManager: React.FC = () => {
 
   const handleAdd = () => {
     setEditItem(null);
+    setInitialItem(null);
     setFormVisible(true);
   };
 
   const handleEdit = (item: OtpItem) => {
     setEditItem(item);
+    setInitialItem(null);
     setFormVisible(true);
   };
 
-  const handleSave = (item: OtpItem) => {
+  const handleSave = (item: OtpItem | OtpDraft) => {
     try {
-      if (item.id) {
+      if ('id' in item && item.id) {
         // 更新现有项目
         window.api.otp.updateOtpItem(item);
         if (messageRef.current) {
@@ -322,6 +325,8 @@ const OtpManager: React.FC = () => {
         }
       }
       setFormVisible(false);
+      setEditItem(null);
+      setInitialItem(null);
       loadOtpItems();
       // 保存后恢复容器焦点
       setTimeout(() => {
@@ -401,16 +406,18 @@ const OtpManager: React.FC = () => {
     setQrImporting(true);
     try {
       const otpUri = await decodeOtpUriFromQrImage(source);
-      window.api.otp.importOtpUri(otpUri);
-      messageRef.current?.success(`${sourceLabel}识别成功，验证器已导入`);
-      loadOtpItems();
+      const parsedItem = window.api.otp.parseOtpUri(otpUri);
+      setEditItem(null);
+      setInitialItem(parsedItem);
+      setFormVisible(true);
+      messageRef.current?.success(`${sourceLabel}识别成功，请确认信息后保存`);
     } catch (error: unknown) {
       console.error('导入OTP二维码失败:', error);
       messageRef.current?.error('导入失败: ' + ((error as Error).message || '未知错误'));
     } finally {
       setQrImporting(false);
     }
-  }, [loadOtpItems]);
+  }, []);
 
   const handleQrFileImport = () => {
     try {
@@ -687,6 +694,8 @@ const OtpManager: React.FC = () => {
         visible={formVisible}
         onClose={() => {
           setFormVisible(false);
+          setEditItem(null);
+          setInitialItem(null);
           // 表单关闭后，恢复容器焦点
           setTimeout(() => {
             if (containerRef.current) {
@@ -696,6 +705,7 @@ const OtpManager: React.FC = () => {
         }}
         onSave={handleSave}
         editItem={editItem}
+        initialItem={initialItem}
       />
 
       <Modal
