@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
-import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled, CloudSyncOutlined } from '@ant-design/icons';
+import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List, Segmented } from 'antd';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled, CloudSyncOutlined, BarsOutlined, AppstoreOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import ChangelogModal from './ChangelogModal';
@@ -16,6 +16,18 @@ import WebDavBackupModal from './WebDavBackupModal';
 const { Text } = Typography;
 const { TextArea } = Input;
 const { useToken } = theme;
+type ViewMode = 'list' | 'grid';
+
+const VIEW_MODE_STORAGE_KEY = 'fastotp:view-mode';
+const GRID_BREAKPOINT = 720;
+
+const getInitialViewMode = (): ViewMode => {
+  try {
+    return window.localStorage.getItem(VIEW_MODE_STORAGE_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+};
 
 const calculateTimeLeft = () => {
   const now = Math.floor(Date.now() / 1000);
@@ -35,6 +47,8 @@ const OtpManager: React.FC = () => {
   const [autoBackupStatus, setAutoBackupStatus] = useState({ running: false, scheduled: false });
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
+  const [gridColumnCount, setGridColumnCount] = useState(() => window.innerWidth >= GRID_BREAKPOINT ? 2 : 1);
   
   // 添加共用计时器状态
   const [timeLeft, setTimeLeft] = useState(DEFAULT_OTP_PERIOD);
@@ -62,6 +76,25 @@ const OtpManager: React.FC = () => {
   );
 
   const pageEnter = useContext(PluginEnterContext);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch (error) {
+      console.warn('保存验证码显示方式失败:', error);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    const updateGridColumnCount = () => {
+      setGridColumnCount(window.innerWidth >= GRID_BREAKPOINT ? 2 : 1);
+    };
+
+    updateGridColumnCount();
+    window.addEventListener('resize', updateGridColumnCount);
+    return () => window.removeEventListener('resize', updateGridColumnCount);
+  }, []);
+
   useEffect(() => {
     const getStatus = window.api?.backup?.getAutoBackupStatus;
     const onStatusChange = window.api?.backup?.onAutoBackupStatusChange;
@@ -237,12 +270,14 @@ const OtpManager: React.FC = () => {
 
     console.log('键盘事件:', event.key, '当前选中:', selectedIndex);
 
+    const verticalStep = viewMode === 'grid' ? gridColumnCount : 1;
+
     switch (event.key) {
       case 'ArrowUp':
         console.log('向上箭头按下');
         event.preventDefault();
         setSelectedIndex(prev => {
-          const newIndex = Math.max(0, prev - 1);
+          const newIndex = Math.max(0, prev - verticalStep);
           console.log('新索引:', newIndex);
           // 在下一个渲染周期滚动到视图
           setTimeout(() => scrollItemIntoView(newIndex), 0);
@@ -253,9 +288,30 @@ const OtpManager: React.FC = () => {
         console.log('向下箭头按下');
         event.preventDefault();
         setSelectedIndex(prev => {
-          const newIndex = Math.min(filteredItems.length - 1, prev + 1);
+          const newIndex = Math.min(filteredItems.length - 1, prev + verticalStep);
           console.log('新索引:', newIndex);
           // 在下一个渲染周期滚动到视图
+          setTimeout(() => scrollItemIntoView(newIndex), 0);
+          return newIndex;
+        });
+        break;
+      case 'ArrowLeft':
+        if (viewMode !== 'grid') break;
+        event.preventDefault();
+        setSelectedIndex(prev => {
+          const newIndex = gridColumnCount > 1 && prev % gridColumnCount !== 0 ? prev - 1 : prev;
+          setTimeout(() => scrollItemIntoView(newIndex), 0);
+          return newIndex;
+        });
+        break;
+      case 'ArrowRight':
+        if (viewMode !== 'grid') break;
+        event.preventDefault();
+        setSelectedIndex(prev => {
+          const hasItemOnRight = gridColumnCount > 1
+            && prev % gridColumnCount < gridColumnCount - 1
+            && prev + 1 < filteredItems.length;
+          const newIndex = hasItemOnRight ? prev + 1 : prev;
           setTimeout(() => scrollItemIntoView(newIndex), 0);
           return newIndex;
         });
@@ -486,10 +542,11 @@ const OtpManager: React.FC = () => {
     }
 
     return (
-      <div className="otp-cards-container" >
+      <div className={`otp-cards-container otp-cards-container--${viewMode}`}>
         {items.map((item, index) => (
           <div 
             key={item.id}
+            className="otp-card-slot"
             ref={(el) => setCardRef(el, index)}
             onClick={() => setSelectedIndex(index)}
           >
@@ -502,6 +559,7 @@ const OtpManager: React.FC = () => {
               onOtpGenerated={(otp) => handleOtpGenerated(otp, index)}
               timeLeft={timeLeft}
               refreshKey={refreshCounter}
+              isGrid={viewMode === 'grid'}
             />
           </div>
         ))}
@@ -514,6 +572,14 @@ const OtpManager: React.FC = () => {
     setGroupItems(newGroupItems);
     setSelectedIndex(-1); // 重置选中项
   }, []);
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    setTimeout(() => {
+      scrollItemIntoView(selectedIndex);
+      containerRef.current?.focus();
+    }, 0);
+  };
 
 
 
@@ -601,6 +667,31 @@ const OtpManager: React.FC = () => {
             </Space>
             
             <Space size={8}>
+              <Segmented
+                aria-label="验证码显示方式"
+                size="small"
+                value={viewMode}
+                onChange={(value) => handleViewModeChange(value as ViewMode)}
+                onKeyDown={(event) => event.stopPropagation()}
+                options={[
+                  {
+                    value: 'list',
+                    label: (
+                      <Tooltip title="列表显示">
+                        <BarsOutlined aria-label="列表显示" />
+                      </Tooltip>
+                    ),
+                  },
+                  {
+                    value: 'grid',
+                    label: (
+                      <Tooltip title="网格显示">
+                        <AppstoreOutlined aria-label="网格显示" />
+                      </Tooltip>
+                    ),
+                  },
+                ]}
+              />
               <Tooltip title="查看已删除的验证器">
                 <Button 
                   type="text" 
@@ -611,7 +702,7 @@ const OtpManager: React.FC = () => {
               </Tooltip>
               
               {otpItems.length > 0 && (
-                <Tooltip title="使用↑↓键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
+                <Tooltip title="使用方向键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
                   <Space size={4}>
                     <Text type="secondary" style={{ fontSize: '12px' }}>快捷键</Text>
                     <QuestionCircleOutlined style={{ color: token.colorPrimary, fontSize: '14px' }} />
