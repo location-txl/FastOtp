@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Progress, Typography, Space, theme, Button, Modal } from 'antd';
-import { DeleteOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Modal, Progress, QRCode, Space, Tooltip, Typography, theme } from 'antd';
+import { DeleteOutlined, EditOutlined, InfoCircleOutlined, ShareAltOutlined } from '@ant-design/icons';
 import { messageRef } from '../App';
 import { OtpItem } from '../custom';
 import { DEFAULT_OTP_PERIOD } from '../constants';
@@ -10,16 +10,7 @@ const { useToken } = theme;
 const REMARK_LEN = 20
 
 interface OtpCardProps {
-  item: {
-    id: string;
-    name: string;
-    secret: string;
-    issuer?: string;
-    remark?: string;
-    digits?: number;
-    period?: number;
-    algorithm?: 'SHA1' | 'SHA256' | 'SHA512';
-  };
+  item: OtpItem;
   index: number;
   onDelete: (id: string) => void;
   onEdit: (item: OtpItem) => void;
@@ -42,6 +33,8 @@ const OtpCard: React.FC<OtpCardProps> = ({
   const [otp, setOtp] = useState('');
   const [nextOtp, setNextOtp] = useState(''); // 新增状态：存储下一个OTP
   const [showRemarkModal, setShowRemarkModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareUri, setShareUri] = useState('');
   const period = item.period || DEFAULT_OTP_PERIOD;
   const { token } = useToken();
 
@@ -120,6 +113,24 @@ const OtpCard: React.FC<OtpCardProps> = ({
     }
   }, [nextOtp]);
 
+  const handleShare = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    try {
+      const uri = window.api.otp.generateOtpUri(item, { includeRemark: false });
+      setShareUri(uri);
+      setShowShareModal(true);
+    } catch (error) {
+      console.error('生成分享二维码失败:', error);
+      messageRef.current?.error('生成分享二维码失败');
+    }
+  }, [item]);
+
+  const closeShareModal = useCallback(() => {
+    setShowShareModal(false);
+    setShareUri('');
+  }, []);
+
   // 支持快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -165,6 +176,14 @@ const OtpCard: React.FC<OtpCardProps> = ({
               onEdit(item);
             }}
           />
+          <Tooltip title="分享密钥">
+            <Button
+              icon={<ShareAltOutlined />}
+              size="small"
+              aria-label="分享密钥"
+              onClick={handleShare}
+            />
+          </Tooltip>
           <Button
             icon={<DeleteOutlined />}
             size="small"
@@ -293,6 +312,38 @@ const OtpCard: React.FC<OtpCardProps> = ({
           </div>
         </Modal>
       )}
+      <Modal
+        title="分享验证器"
+        open={showShareModal}
+        onCancel={(e: React.MouseEvent<HTMLButtonElement>) => {
+          e.stopPropagation();
+          closeShareModal();
+        }}
+        footer={null}
+        maskClosable={true}
+      >
+        <div
+          onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}
+        >
+          <div style={{ textAlign: 'center' }}>
+            <Text strong style={{ display: 'block' }}>{item.issuer || '未知发行方'}</Text>
+            <Text type="secondary">{item.account || item.name}</Text>
+          </div>
+          {shareUri && (
+            <div style={{ padding: 12, backgroundColor: '#fff', borderRadius: token.borderRadiusLG }}>
+              <QRCode value={shareUri} size={220} bordered={false} errorLevel="M" />
+            </div>
+          )}
+          <Text type="secondary">请使用其他验证器扫描二维码导入</Text>
+          <Alert
+            type="warning"
+            showIcon
+            message="二维码包含登录密钥，请勿截图或发送给不可信的人"
+            style={{ width: '100%' }}
+          />
+        </div>
+      </Modal>
     </Card>
   );
 };
