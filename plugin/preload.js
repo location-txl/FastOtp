@@ -387,7 +387,7 @@ function importOtpFromFile(filePath) {
 }
 
 // 生成OTP URI
-function generateOtpUri(item) {
+function generateOtpUri(item, options = {}) {
     try {
         if (!item.secret) {
             throw new Error('缺少必要的 secret 参数');
@@ -435,7 +435,7 @@ function generateOtpUri(item) {
             params.set('counter', item.counter.toString());
         }
 
-        if (item.remark) {
+        if (options.includeRemark !== false && item.remark) {
             params.set('remark', escapeRemark(item.remark));
         }
         
