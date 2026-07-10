@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled, CloudSyncOutlined } from '@ant-design/icons';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled, CloudSyncOutlined, PictureOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import ChangelogModal from './ChangelogModal';
@@ -12,6 +12,7 @@ import PageLayout from './PageLayout';
 import OtpGroup from './OtpGroup';
 import { PluginEnterContext } from '../hooks/PageEnterContext';
 import WebDavBackupModal from './WebDavBackupModal';
+import { decodeOtpUriFromQrImage, getQrImageSource } from '../utils/qrCode';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -32,6 +33,7 @@ const OtpManager: React.FC = () => {
   const [deletedModalVisible, setDeletedModalVisible] = useState(false);
   const [deletedItems, setDeletedItems] = useState<OtpItem[]>([]);
   const [webdavBackupVisible, setWebdavBackupVisible] = useState(false);
+  const [qrImporting, setQrImporting] = useState(false);
   const [autoBackupStatus, setAutoBackupStatus] = useState({ running: false, scheduled: false });
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
@@ -44,6 +46,7 @@ const OtpManager: React.FC = () => {
   
   // 使用useRef代替useState存储验证码，避免重新渲染循环
   const currentOtpsRef = useRef<string[]>([]);
+  const handledQrPayloadRef = useRef<unknown>(undefined);
   
   // 获取App上下文中的modal API
   const { modal } = App.useApp();
@@ -151,7 +154,7 @@ const OtpManager: React.FC = () => {
     }
   };
 
-  const loadOtpItems = () => {
+  const loadOtpItems = useCallback(() => {
     try {
       const items = window.api.otp.getOtpItems();
       setOtpItems(items);
@@ -161,7 +164,7 @@ const OtpManager: React.FC = () => {
         messageRef.current.error('加载验证器列表失败');
       }
     }
-  };
+  }, []);
 
   const loadDeletedItems = () => {
     try {
@@ -222,7 +225,7 @@ const OtpManager: React.FC = () => {
   };
   useEffect(() => {
     loadOtpItems();
-  }, []);
+  }, [loadOtpItems]);
 
   // 使用React的onKeyDown事件处理键盘输入
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -393,6 +396,50 @@ const OtpManager: React.FC = () => {
       }
     }
   };
+
+  const handleQrImageImport = useCallback(async (source: string, sourceLabel: string) => {
+    setQrImporting(true);
+    try {
+      const otpUri = await decodeOtpUriFromQrImage(source);
+      window.api.otp.importOtpUri(otpUri);
+      messageRef.current?.success(`${sourceLabel}识别成功，验证器已导入`);
+      loadOtpItems();
+    } catch (error: unknown) {
+      console.error('导入OTP二维码失败:', error);
+      messageRef.current?.error('导入失败: ' + ((error as Error).message || '未知错误'));
+    } finally {
+      setQrImporting(false);
+    }
+  }, [loadOtpItems]);
+
+  const handleQrFileImport = () => {
+    try {
+      const image = window.api.otp.selectQrImage();
+      if (!image) return;
+      void handleQrImageImport(image.dataUrl, '图片二维码');
+    } catch (error: unknown) {
+      console.error('选择OTP二维码图片失败:', error);
+      messageRef.current?.error('选择图片失败: ' + ((error as Error).message || '未知错误'));
+    }
+  };
+
+  useEffect(() => {
+    if (!pageEnter) {
+      handledQrPayloadRef.current = undefined;
+      return;
+    }
+    if (pageEnter.code !== 'otp-import-image' || pageEnter.type !== 'img') return;
+    if (handledQrPayloadRef.current === pageEnter.payload) return;
+
+    handledQrPayloadRef.current = pageEnter.payload;
+    try {
+      const source = getQrImageSource(pageEnter.payload);
+      void handleQrImageImport(source, '剪贴板二维码');
+    } catch (error: unknown) {
+      console.error('读取uTools剪贴板图片失败:', error);
+      messageRef.current?.error('导入失败: ' + ((error as Error).message || '未知错误'));
+    }
+  }, [pageEnter, handleQrImageImport]);
 
   // 简化文件导入处理，直接使用uTools API选择文件
   const handleFileImport = () => {
@@ -571,6 +618,15 @@ const OtpManager: React.FC = () => {
                   icon={<FileTextOutlined />} 
                   onClick={handleFileImport}
                   size="small"
+                />
+              </Tooltip>
+              <Tooltip title="从二维码图片导入">
+                <Button
+                  type="text"
+                  icon={<PictureOutlined />}
+                  onClick={handleQrFileImport}
+                  size="small"
+                  loading={qrImporting}
                 />
               </Tooltip>
               <Tooltip title="导出验证器配置">

@@ -4,6 +4,7 @@ const otpCode = require('./otp_code');
 const webdavBackup = require('./webdav_backup');
 const { createAutoBackupManager } = require('./auto_backup');
 const fs = require('fs');
+const path = require('path');
 const { escapeRemark, unescapeRemark } = require('./remark_codec');
 
 const DB_KEY_OTP_ITEMS = 'otp_items';
@@ -53,6 +54,7 @@ window.api = {
         importOtpUri,
         importOtpTextFile,
         importOtpFromFile,
+        selectQrImage,
         exportOtpToFile,
         generateOtpUri,
         getDeletedItems,
@@ -383,6 +385,59 @@ function importOtpFromFile(filePath) {
     } catch (error) {
         console.error('从文件导入OTP失败:', error);
         throw error;
+    }
+}
+
+// 选择二维码图片，并转换为渲染层可直接解析的 Data URL
+function selectQrImage() {
+    try {
+        const files = utools.showOpenDialog({
+            title: '选择 OTP 二维码图片',
+            filters: [
+                { name: '图片文件', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'] }
+            ],
+            properties: ['openFile']
+        });
+
+        if (!files || files.length === 0) {
+            return null;
+        }
+
+        const filePath = files[0];
+        if (!fs.existsSync(filePath)) {
+            throw new Error('图片文件不存在');
+        }
+
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) {
+            throw new Error('请选择图片文件');
+        }
+        if (stat.size > 30 * 1024 * 1024) {
+            throw new Error('图片不能超过 30 MB');
+        }
+
+        const extension = path.extname(filePath).slice(1).toLowerCase();
+        const mimeTypes = {
+            png: 'image/png',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            webp: 'image/webp',
+            bmp: 'image/bmp',
+            gif: 'image/gif'
+        };
+        const mimeType = mimeTypes[extension];
+        if (!mimeType) {
+            throw new Error('不支持的图片格式');
+        }
+
+        const data = fs.readFileSync(filePath).toString('base64');
+        return {
+            name: path.basename(filePath),
+            dataUrl: `data:${mimeType};base64,${data}`
+        };
+    } catch (error) {
+        console.error('选择二维码图片失败:', error);
+        throw new Error(error?.message || '选择二维码图片失败');
     }
 }
 

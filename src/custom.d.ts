@@ -59,6 +59,11 @@ interface ImportTextFileResult {
     errors: string[];
 }
 
+interface QrImageSelection {
+    name: string;
+    dataUrl: string;
+}
+
 interface ExportResult {
     success: boolean;
     message: string;
@@ -89,6 +94,7 @@ declare global {
                 importOtpUri: (uri: string) => OtpItem;
                 importOtpTextFile: (text: string) => ImportTextFileResult;
                 importOtpFromFile: (filePath: string) => ImportTextFileResult;
+                selectQrImage: () => QrImageSelection | null;
                 exportOtpToFile: () => ExportResult;
                 generateOtpUri: (item: OtpItem, options?: { includeRemark?: boolean }) => string;
                 getDeletedItems: () => OtpItem[];
