@@ -19,7 +19,6 @@ const { useToken } = theme;
 type ViewMode = 'list' | 'grid';
 
 const VIEW_MODE_STORAGE_KEY = 'fastotp:view-mode';
-const GRID_BREAKPOINT = 720;
 
 const getInitialViewMode = (): ViewMode => {
   try {
@@ -48,7 +47,7 @@ const OtpManager: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
-  const [gridColumnCount, setGridColumnCount] = useState(() => window.innerWidth >= GRID_BREAKPOINT ? 2 : 1);
+  const [gridColumnCount, setGridColumnCount] = useState(1);
   
   // 添加共用计时器状态
   const [timeLeft, setTimeLeft] = useState(DEFAULT_OTP_PERIOD);
@@ -64,6 +63,7 @@ const OtpManager: React.FC = () => {
   
   const cardRefs = useRef<HTMLDivElement[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const cardsContainerRef = useRef<HTMLDivElement>(null);
 
   // 获取主题色
   const { token } = useToken();
@@ -84,16 +84,6 @@ const OtpManager: React.FC = () => {
       console.warn('保存验证码显示方式失败:', error);
     }
   }, [viewMode]);
-
-  useEffect(() => {
-    const updateGridColumnCount = () => {
-      setGridColumnCount(window.innerWidth >= GRID_BREAKPOINT ? 2 : 1);
-    };
-
-    updateGridColumnCount();
-    window.addEventListener('resize', updateGridColumnCount);
-    return () => window.removeEventListener('resize', updateGridColumnCount);
-  }, []);
 
   useEffect(() => {
     const getStatus = window.api?.backup?.getAutoBackupStatus;
@@ -119,6 +109,35 @@ const OtpManager: React.FC = () => {
       return groupItems;
     }
   }, [otpItems, searchText, groupItems]);
+
+  useEffect(() => {
+    if (viewMode !== 'grid' || !cardsContainerRef.current) {
+      setGridColumnCount(1);
+      return;
+    }
+
+    const gridElement = cardsContainerRef.current;
+    let frameId = 0;
+    const updateGridColumnCount = () => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        const templateColumns = window.getComputedStyle(gridElement).gridTemplateColumns;
+        const columnCount = templateColumns === 'none'
+          ? 1
+          : templateColumns.split(' ').filter(Boolean).length;
+        setGridColumnCount(Math.max(1, columnCount));
+      });
+    };
+
+    updateGridColumnCount();
+    const resizeObserver = new ResizeObserver(updateGridColumnCount);
+    resizeObserver.observe(gridElement);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      resizeObserver.disconnect();
+    };
+  }, [viewMode, filteredItems.length]);
 
   // 共用的计时器逻辑
   useEffect(() => {
@@ -542,7 +561,10 @@ const OtpManager: React.FC = () => {
     }
 
     return (
-      <div className={`otp-cards-container otp-cards-container--${viewMode}`}>
+      <div
+        ref={cardsContainerRef}
+        className={`otp-cards-container otp-cards-container--${viewMode}`}
+      >
         {items.map((item, index) => (
           <div 
             key={item.id}
