@@ -435,7 +435,7 @@ function generateOtpUri(item, options = {}) {
             params.set('counter', item.counter.toString());
         }
 
-        if (options.includeRemark !== false && item.remark) {
+        if (options?.includeRemark !== false && item.remark) {
             params.set('remark', escapeRemark(item.remark));
         }
         
