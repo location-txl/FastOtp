@@ -185,7 +185,7 @@ const OtpManager: React.FC = () => {
     // 重置引用数组大小以匹配当前项目数量
     cardRefs.current = cardRefs.current.slice(0, filteredItems.length);
     // 如果有项目且未选择任何项目，默认选择第一个
-    if (filteredItems.length > 0 && selectedIndex === -1) {
+    if (filteredItems.length > 0 && selectedIndex < 0) {
       setSelectedIndex(0);
     } else if (selectedIndex >= filteredItems.length) {
       // 如果选择的索引超出范围，重置为最后一个
@@ -288,6 +288,8 @@ const OtpManager: React.FC = () => {
     }
 
     console.log('键盘事件:', event.key, '当前选中:', selectedIndex);
+
+    if (filteredItems.length === 0 || selectedIndex < 0) return;
 
     const verticalStep = viewMode === 'grid' ? gridColumnCount : 1;
 
