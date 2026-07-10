@@ -90,7 +90,7 @@ declare global {
                 importOtpTextFile: (text: string) => ImportTextFileResult;
                 importOtpFromFile: (filePath: string) => ImportTextFileResult;
                 exportOtpToFile: () => ExportResult;
-                generateOtpUri: (item: OtpItem) => string;
+                generateOtpUri: (item: OtpItem, options?: { includeRemark?: boolean }) => string;
                 getDeletedItems: () => OtpItem[];
                 restoreDeletedItem: (id: string) => boolean;
                 permanentDeleteItem: (id: string) => boolean;
