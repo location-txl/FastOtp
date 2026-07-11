@@ -412,8 +412,8 @@ function selectQrImage() {
         if (!stat.isFile()) {
             throw new Error('请选择图片文件');
         }
-        if (stat.size > 30 * 1024 * 1024) {
-            throw new Error('图片不能超过 30 MB');
+        if (stat.size > 10 * 1024 * 1024) {
+            throw new Error('图片不能超过 10 MB');
         }
 
         const extension = path.extname(filePath).slice(1).toLowerCase();
