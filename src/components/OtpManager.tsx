@@ -898,3 +898,57 @@ const OtpManager: React.FC = () => {
             />
           ) : (
             <List
+              dataSource={deletedItems}
+              renderItem={(item) => (
+                <List.Item
+                  actions={[
+                    <Tooltip title="恢复验证器">
+                      <Button
+                        type="text"
+                        icon={<UndoOutlined />}
+                        onClick={() => handleRestoreItem(item.id)}
+                        size="small"
+                      />
+                    </Tooltip>,
+                    <Tooltip title="永久删除">
+                      <Button
+                        type="text"
+                        icon={<DeleteFilled />}
+                        onClick={() => handlePermanentDelete(item.id)}
+                        size="small"
+                        danger
+                      />
+                    </Tooltip>
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <div>
+                        <Text strong>{item.issuer || '未知发行方'}</Text>
+                        {item.name && <Text type="secondary" style={{ marginLeft: 8 }}>- {item.name}</Text>}
+                      </div>
+                    }
+                    description={
+                      <div>
+                        {item.remark && (
+                          <div style={{ marginBottom: 4 }}>
+                            <Text type="secondary">{item.remark}</Text>
+                          </div>
+                        )}
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          删除时间: {item.deletedAt ? new Date(item.deletedAt).toLocaleString('zh-CN') : '未知'}
+                        </Text>
+                      </div>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          )}
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+export default OtpManager; 
