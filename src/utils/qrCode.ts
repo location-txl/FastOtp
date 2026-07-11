@@ -32,8 +32,9 @@ export const getQrImageSource = (payload: unknown): string => {
   }
 
   // 兼容部分 uTools 版本直接传入不带 Data URL 头的 base64 数据。
-  if (/^[A-Za-z0-9+/=\r\n]+$/.test(value) && value.length > 100) {
-    return `data:image/png;base64,${value.replace(/\s/g, '')}`;
+  const cleanValue = value.replace(/\s/g, '');
+  if (/^[A-Za-z0-9+/=]+$/.test(cleanValue) && cleanValue.length > 100) {
+    return `data:image/png;base64,${cleanValue}`;
   }
 
   throw new Error('剪贴板中的内容不是有效图片');
