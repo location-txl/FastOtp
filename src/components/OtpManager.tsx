@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
-import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List } from 'antd';
-import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled, CloudSyncOutlined, PictureOutlined } from '@ant-design/icons';
+import { Button, Empty, Modal, Typography, Input, App, Space, Tooltip, theme, List, Segmented } from 'antd';
+import { PlusOutlined, ExclamationCircleFilled, ImportOutlined, QuestionCircleOutlined, FileTextOutlined, ExportOutlined, HistoryOutlined, DeleteOutlined, UndoOutlined, DeleteFilled, CloudSyncOutlined, PictureOutlined, BarsOutlined, AppstoreOutlined } from '@ant-design/icons';
 import OtpCard from './OtpCard';
 import OtpForm from './OtpForm';
 import ChangelogModal from './ChangelogModal';
@@ -17,6 +17,17 @@ import { decodeOtpUriFromQrImage, getQrImageSource } from '../utils/qrCode';
 const { Text } = Typography;
 const { TextArea } = Input;
 const { useToken } = theme;
+type ViewMode = 'list' | 'grid';
+
+const VIEW_MODE_STORAGE_KEY = 'fastotp:view-mode';
+
+const getInitialViewMode = (): ViewMode => {
+  try {
+    return window.localStorage.getItem(VIEW_MODE_STORAGE_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+};
 
 const calculateTimeLeft = () => {
   const now = Math.floor(Date.now() / 1000);
@@ -38,6 +49,8 @@ const OtpManager: React.FC = () => {
   const [autoBackupStatus, setAutoBackupStatus] = useState({ running: false, scheduled: false });
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [groupItems, setGroupItems] = useState<OtpItem[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
+  const [gridColumnCount, setGridColumnCount] = useState(1);
   
   // 添加共用计时器状态
   const [timeLeft, setTimeLeft] = useState(DEFAULT_OTP_PERIOD);
@@ -54,6 +67,7 @@ const OtpManager: React.FC = () => {
   
   const cardRefs = useRef<HTMLDivElement[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const cardsContainerRef = useRef<HTMLDivElement>(null);
 
   // 获取主题色
   const { token } = useToken();
@@ -66,6 +80,15 @@ const OtpManager: React.FC = () => {
   );
 
   const pageEnter = useContext(PluginEnterContext);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch (error) {
+      console.warn('保存验证码显示方式失败:', error);
+    }
+  }, [viewMode]);
+
   useEffect(() => {
     const getStatus = window.api?.backup?.getAutoBackupStatus;
     const onStatusChange = window.api?.backup?.onAutoBackupStatusChange;
@@ -90,6 +113,35 @@ const OtpManager: React.FC = () => {
       return groupItems;
     }
   }, [otpItems, searchText, groupItems]);
+
+  useEffect(() => {
+    if (viewMode !== 'grid' || !cardsContainerRef.current) {
+      setGridColumnCount(1);
+      return;
+    }
+
+    const gridElement = cardsContainerRef.current;
+    let frameId = 0;
+    const updateGridColumnCount = () => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        const templateColumns = window.getComputedStyle(gridElement).gridTemplateColumns;
+        const columnCount = templateColumns === 'none'
+          ? 1
+          : templateColumns.split(' ').filter(Boolean).length;
+        setGridColumnCount(Math.max(1, columnCount));
+      });
+    };
+
+    updateGridColumnCount();
+    const resizeObserver = new ResizeObserver(updateGridColumnCount);
+    resizeObserver.observe(gridElement);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      resizeObserver.disconnect();
+    };
+  }, [viewMode, filteredItems.length]);
 
   // 共用的计时器逻辑
   useEffect(() => {
@@ -137,7 +189,7 @@ const OtpManager: React.FC = () => {
     // 重置引用数组大小以匹配当前项目数量
     cardRefs.current = cardRefs.current.slice(0, filteredItems.length);
     // 如果有项目且未选择任何项目，默认选择第一个
-    if (filteredItems.length > 0 && selectedIndex === -1) {
+    if (filteredItems.length > 0 && selectedIndex < 0) {
       setSelectedIndex(0);
     } else if (selectedIndex >= filteredItems.length) {
       // 如果选择的索引超出范围，重置为最后一个
@@ -241,12 +293,16 @@ const OtpManager: React.FC = () => {
 
     console.log('键盘事件:', event.key, '当前选中:', selectedIndex);
 
+    if (filteredItems.length === 0 || selectedIndex < 0) return;
+
+    const verticalStep = viewMode === 'grid' ? gridColumnCount : 1;
+
     switch (event.key) {
       case 'ArrowUp':
         console.log('向上箭头按下');
         event.preventDefault();
         setSelectedIndex(prev => {
-          const newIndex = Math.max(0, prev - 1);
+          const newIndex = Math.max(0, prev - verticalStep);
           console.log('新索引:', newIndex);
           // 在下一个渲染周期滚动到视图
           setTimeout(() => scrollItemIntoView(newIndex), 0);
@@ -257,9 +313,30 @@ const OtpManager: React.FC = () => {
         console.log('向下箭头按下');
         event.preventDefault();
         setSelectedIndex(prev => {
-          const newIndex = Math.min(filteredItems.length - 1, prev + 1);
+          const newIndex = Math.min(filteredItems.length - 1, prev + verticalStep);
           console.log('新索引:', newIndex);
           // 在下一个渲染周期滚动到视图
+          setTimeout(() => scrollItemIntoView(newIndex), 0);
+          return newIndex;
+        });
+        break;
+      case 'ArrowLeft':
+        if (viewMode !== 'grid') break;
+        event.preventDefault();
+        setSelectedIndex(prev => {
+          const newIndex = gridColumnCount > 1 && prev % gridColumnCount !== 0 ? prev - 1 : prev;
+          setTimeout(() => scrollItemIntoView(newIndex), 0);
+          return newIndex;
+        });
+        break;
+      case 'ArrowRight':
+        if (viewMode !== 'grid') break;
+        event.preventDefault();
+        setSelectedIndex(prev => {
+          const hasItemOnRight = gridColumnCount > 1
+            && prev % gridColumnCount < gridColumnCount - 1
+            && prev + 1 < filteredItems.length;
+          const newIndex = hasItemOnRight ? prev + 1 : prev;
           setTimeout(() => scrollItemIntoView(newIndex), 0);
           return newIndex;
         });
@@ -540,10 +617,14 @@ const OtpManager: React.FC = () => {
     }
 
     return (
-      <div className="otp-cards-container" >
+      <div
+        ref={cardsContainerRef}
+        className={`otp-cards-container otp-cards-container--${viewMode}`}
+      >
         {items.map((item, index) => (
           <div 
             key={item.id}
+            className="otp-card-slot"
             ref={(el) => setCardRef(el, index)}
             onClick={() => setSelectedIndex(index)}
           >
@@ -556,6 +637,7 @@ const OtpManager: React.FC = () => {
               onOtpGenerated={(otp) => handleOtpGenerated(otp, index)}
               timeLeft={timeLeft}
               refreshKey={refreshCounter}
+              isGrid={viewMode === 'grid'}
             />
           </div>
         ))}
@@ -568,6 +650,14 @@ const OtpManager: React.FC = () => {
     setGroupItems(newGroupItems);
     setSelectedIndex(-1); // 重置选中项
   }, []);
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    setTimeout(() => {
+      scrollItemIntoView(selectedIndex);
+      containerRef.current?.focus();
+    }, 0);
+  };
 
 
 
@@ -664,6 +754,31 @@ const OtpManager: React.FC = () => {
             </Space>
             
             <Space size={8}>
+              <Segmented
+                aria-label="验证码显示方式"
+                size="small"
+                value={viewMode}
+                onChange={(value) => handleViewModeChange(value as ViewMode)}
+                onKeyDown={(event) => event.stopPropagation()}
+                options={[
+                  {
+                    value: 'list',
+                    label: (
+                      <Tooltip title="列表显示">
+                        <BarsOutlined aria-label="列表显示" />
+                      </Tooltip>
+                    ),
+                  },
+                  {
+                    value: 'grid',
+                    label: (
+                      <Tooltip title="网格显示">
+                        <AppstoreOutlined aria-label="网格显示" />
+                      </Tooltip>
+                    ),
+                  },
+                ]}
+              />
               <Tooltip title="查看已删除的验证器">
                 <Button 
                   type="text" 
@@ -674,7 +789,7 @@ const OtpManager: React.FC = () => {
               </Tooltip>
               
               {otpItems.length > 0 && (
-                <Tooltip title="使用↑↓键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
+                <Tooltip title="使用方向键选择验证码，回车键复制选中验证码，或按下 Ctrl/⌘ + 数字键(1-9)快速复制对应的验证码">
                   <Space size={4}>
                     <Text type="secondary" style={{ fontSize: '12px' }}>快捷键</Text>
                     <QuestionCircleOutlined style={{ color: token.colorPrimary, fontSize: '14px' }} />
@@ -783,57 +898,3 @@ const OtpManager: React.FC = () => {
             />
           ) : (
             <List
-              dataSource={deletedItems}
-              renderItem={(item) => (
-                <List.Item
-                  actions={[
-                    <Tooltip title="恢复验证器">
-                      <Button
-                        type="text"
-                        icon={<UndoOutlined />}
-                        onClick={() => handleRestoreItem(item.id)}
-                        size="small"
-                      />
-                    </Tooltip>,
-                    <Tooltip title="永久删除">
-                      <Button
-                        type="text"
-                        icon={<DeleteFilled />}
-                        onClick={() => handlePermanentDelete(item.id)}
-                        size="small"
-                        danger
-                      />
-                    </Tooltip>
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={
-                      <div>
-                        <Text strong>{item.issuer || '未知发行方'}</Text>
-                        {item.name && <Text type="secondary" style={{ marginLeft: 8 }}>- {item.name}</Text>}
-                      </div>
-                    }
-                    description={
-                      <div>
-                        {item.remark && (
-                          <div style={{ marginBottom: 4 }}>
-                            <Text type="secondary">{item.remark}</Text>
-                          </div>
-                        )}
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          删除时间: {item.deletedAt ? new Date(item.deletedAt).toLocaleString('zh-CN') : '未知'}
-                        </Text>
-                      </div>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          )}
-        </div>
-      </Modal>
-    </div>
-  );
-};
-
-export default OtpManager; 
