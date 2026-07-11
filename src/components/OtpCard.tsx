@@ -18,6 +18,7 @@ interface OtpCardProps {
   onOtpGenerated?: (otp: string) => void;
   timeLeft: number; // 从父组件传入的计时器时间
   refreshKey: number; // 用于触发OTP刷新的计数器
+  isGrid?: boolean;
 }
 
 const OtpCard: React.FC<OtpCardProps> = ({ 
@@ -28,7 +29,8 @@ const OtpCard: React.FC<OtpCardProps> = ({
   isSelected = false, 
   onOtpGenerated,
   timeLeft,
-  refreshKey
+  refreshKey,
+  isGrid = false
 }) => {
   const [otp, setOtp] = useState('');
   const [nextOtp, setNextOtp] = useState(''); // 新增状态：存储下一个OTP
@@ -155,11 +157,12 @@ const OtpCard: React.FC<OtpCardProps> = ({
 
   return (
     <Card
+      className={`otp-card${isGrid ? ' otp-card--grid' : ''}`}
       title={
-        <Space>
-          {item.issuer && <Text strong>{item.issuer}</Text>}
-          <Text>{item.name}</Text>
-          {index < 9 && (
+        <Space size={6} className="otp-card-title">
+          {item.issuer && <Text strong ellipsis={isGrid}>{item.issuer}</Text>}
+          <Text ellipsis={isGrid}>{item.name}</Text>
+          {!isGrid && index < 9 && (
             <Text type="secondary" style={{ fontSize: '12px' }}>
               (Ctrl/⌘+{index + 1})
             </Text>
@@ -167,10 +170,12 @@ const OtpCard: React.FC<OtpCardProps> = ({
         </Space>
       }
       extra={
-        <Space>
+        <Space size={isGrid ? 2 : 8}>
           <Button
             icon={<EditOutlined />}
             size="small"
+            type={isGrid ? 'text' : 'default'}
+            aria-label="编辑验证器"
             onClick={(e) => {
               e.stopPropagation(); // 阻止事件冒泡
               onEdit(item);
@@ -180,6 +185,7 @@ const OtpCard: React.FC<OtpCardProps> = ({
             <Button
               icon={<ShareAltOutlined />}
               size="small"
+              type={isGrid ? 'text' : 'default'}
               aria-label="分享密钥"
               onClick={handleShare}
             />
@@ -187,6 +193,8 @@ const OtpCard: React.FC<OtpCardProps> = ({
           <Button
             icon={<DeleteOutlined />}
             size="small"
+            type={isGrid ? 'text' : 'default'}
+            aria-label="删除验证器"
             danger
             onClick={(e) => {
               e.stopPropagation(); // 阻止事件冒泡
@@ -196,9 +204,10 @@ const OtpCard: React.FC<OtpCardProps> = ({
         </Space>
       }
       style={{ 
-        marginBottom: 10,
+        marginBottom: isGrid ? 0 : 10,
         backgroundColor: selectedBgColor,
         width: '100%',
+        height: isGrid ? '100%' : undefined,
         border: isSelected ? `1px solid ${token.colorPrimary}` : undefined,
         cursor: 'pointer', // 添加指针样式表明可点击
       }}
@@ -206,9 +215,9 @@ const OtpCard: React.FC<OtpCardProps> = ({
       styles={{
         body: {
           transition: 'all 0.3s',
-          padding: '8px 16px',
+          padding: isGrid ? '10px 12px' : '8px 16px',
         },
-        header: { padding: '0 16px' },
+        header: { padding: isGrid ? '0 12px' : '0 16px' },
       }}
       onClick={copyCurrentOtp} // 添加点击事件
     >
