@@ -1,14 +1,15 @@
 {
   "name": "utools_otp",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "clean:plugin-deps": "node scripts/clean-plugin-deps.js"
+    "clean:plugin-deps": "node scripts/clean-plugin-deps.js",
+    "publish:ztools": "npm run build && npm run clean:plugin-deps && cd plugin && ztools publish"
   },
   "dependencies": {
     "@ant-design/v5-patch-for-react-19": "^1.0.3",

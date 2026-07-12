@@ -1,4 +1,8 @@
 {
+  "name": "fast-otp",
+  "version": "1.6.0",
+  "private": true,
+  "description": "FastOTP plugin runtime dependencies",
   "type": "commonjs",
   "dependencies": {
     "archiver": "^7.0.1",

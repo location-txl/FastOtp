@@ -1,5 +1,8 @@
 {
-  "name": "FastOTP",
+  "name": "fast-otp",
+  "title": "FastOTP",
+  "description": "OTP 二次验证码管理，支持分组、WebDAV 备份、二维码导入与分享",
+  "author": "location-txl",
   "version": "1.6.0",
   "main": "app/index.html",
   "logo": "logo.png",
