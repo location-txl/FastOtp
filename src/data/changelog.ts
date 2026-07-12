@@ -9,12 +9,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: "1.6.0",
+    date: "2026-7-12",
+    features: [
+      "支持分享验证器二维码，可被其他验证器应用扫描导入",
+      "新增列表/网格视图切换，网格布局随窗口宽度自适应",
+      "支持从二维码图片导入验证器（本地选图或剪贴板图片）",
+    ]
+  },
+  {
     version: "1.5.0",
     date: "2026-1-12",
     features: [
       "支持 webdav 备份功能",
     ]
   },
+
   {
     version: "1.3.0",
     date: "2025-8-10",
