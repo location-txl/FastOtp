@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   build: {
-    outDir: 'plugin/dist',
+    // 不用 dist/build：@ztools-center/plugin-cli publish 会忽略这两个目录名
+    outDir: 'plugin/app',
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
