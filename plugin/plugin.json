@@ -1,4 +1,6 @@
 {
+  "name": "FastOTP",
+  "version": "1.6.0",
   "main": "dist/index.html",
   "logo": "logo.png",
   "preload": "preload.js",

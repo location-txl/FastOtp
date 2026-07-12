@@ -1,5 +1,11 @@
 console.log("preload.js loaded")
 
+// zTools exposes its uTools-compatible API as `ztools`. Normalize the global
+// before any preload initialization reads `utools`.
+if (!globalThis.utools && globalThis.ztools) {
+    globalThis.utools = globalThis.ztools;
+}
+
 const otpCode = require('./otp_code');
 const webdavBackup = require('./webdav_backup');
 const { createAutoBackupManager } = require('./auto_backup');
