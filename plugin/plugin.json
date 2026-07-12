@@ -7,6 +7,16 @@
       "code": "otp",
       "explain": "OTP 二次验证码，支持快捷键复制",
       "cmds": ["OTP", "二次验证", "验证码", "2FA", "Two-Factor Authentication"]
+    },
+    {
+      "code": "otp-import-image",
+      "explain": "识别图片二维码并导入 OTP",
+      "cmds": [
+        {
+          "type": "img",
+          "label": "导入 OTP 二维码"
+        }
+      ]
     }
   ],
   "development": {

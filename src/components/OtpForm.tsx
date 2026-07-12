@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Button } from 'antd';
 import { DEFAULT_OTP_PERIOD, DEFAULT_OTP_DIGITS, DEFAULT_OTP_ALGORITHM, DEFAULT_OTP_TYPE } from '../constants';
-import { OtpItem } from '../custom';
+import { OtpDraft, OtpItem } from '../custom';
 
 interface OtpFormProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (values: OtpItem) => void;
+  onSave: (values: OtpItem | OtpDraft) => void;
   editItem?: OtpItem | null;
+  initialItem?: OtpDraft | null;
 }
 
 interface OtpFormValues {
@@ -16,13 +17,13 @@ interface OtpFormValues {
   issuer?: string;
   secret: string;
   remark?: string;
-  type: 'totp';
-  algorithm: 'SHA1';
-  digits: 6;
-  period: 30;
+  type: 'totp' | 'hotp';
+  algorithm: 'SHA1' | 'SHA256' | 'SHA512';
+  digits: number;
+  period: number;
 }
 
-const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem }) => {
+const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem, initialItem }) => {
   const [form] = Form.useForm<OtpFormValues>();
 
   // 处理表单关闭
@@ -32,8 +33,9 @@ const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem })
   };
 
   useEffect(() => {
-    if (visible && editItem) {
-      form.setFieldsValue(editItem as OtpFormValues);
+    if (visible && (editItem || initialItem)) {
+      form.resetFields();
+      form.setFieldsValue((editItem || initialItem) as OtpFormValues);
     } else if (visible) {
       form.resetFields();
       // 设置默认值
@@ -44,18 +46,16 @@ const OtpForm: React.FC<OtpFormProps> = ({ visible, onClose, onSave, editItem })
         period: DEFAULT_OTP_PERIOD
       });
     }
-  }, [visible, editItem, form]);
+  }, [visible, editItem, initialItem, form]);
 
   const handleSubmit = () => {
     form.validateFields().then(values => {
-      // 强制设置固定值
-      values.type = DEFAULT_OTP_TYPE;
-      values.algorithm = DEFAULT_OTP_ALGORITHM;
-      values.digits = DEFAULT_OTP_DIGITS;
-      values.period = DEFAULT_OTP_PERIOD;
-      
-      const item = editItem ? { ...editItem, ...values } : values;
-      onSave(item as OtpItem);
+      const item = editItem
+        ? { ...editItem, ...values }
+        : initialItem
+          ? { ...initialItem, ...values }
+          : values;
+      onSave(item as OtpItem | OtpDraft);
       form.resetFields();
     });
   };
